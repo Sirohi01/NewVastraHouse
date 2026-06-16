@@ -4,7 +4,7 @@ import tsParser from "@typescript-eslint/parser";
 
 export default [
   {
-    ignores: ["node_modules/**", "dist/**", ".next/**"],
+    ignores: [".next/**", "node_modules/**"],
   },
   {
     plugins: {
@@ -13,7 +13,7 @@ export default [
     rules: {},
   },
   {
-    files: ["**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -27,22 +27,13 @@ export default [
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/consistent-type-imports": "error",
-      "no-console": ["warn", { allow: ["warn", "error", "info"] }],
-    },
-  },
-  {
-    files: ["apps/frontend/**/*.{ts,tsx}"],
-    plugins: {
-      "@next/next": nextPlugin,
-    },
-    rules: {
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
       "@next/next/no-html-link-for-pages": "off",
     },
     settings: {
       next: {
-        rootDir: "apps/frontend/",
+        rootDir: ".",
       },
     },
   },
