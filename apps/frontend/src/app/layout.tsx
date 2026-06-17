@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "The Vastra House",
-  description: "Fashion commerce operating system foundation.",
+  description: "Soft-luxury Indian wear, festive edits, and everyday occasion pieces.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
