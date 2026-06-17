@@ -188,9 +188,9 @@ export function CartClient() {
         </dl>
         <Link
           className="mt-5 block h-12 rounded-md bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
-          href="/shop"
+          href="/checkout"
         >
-          Keep Shopping
+          Checkout
         </Link>
       </aside>
     </div>
