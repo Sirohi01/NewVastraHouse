@@ -56,7 +56,7 @@ export function CompareClient() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">{products.length} products selected</p>
         <button
-          className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive"
+          className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
           onClick={clear}
           type="button"
         >

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PublicPageFrame } from "@/components/layout/PublicPageFrame";
 
 export default function ForgotPasswordPage() {
   const [message, setMessage] = useState("");
@@ -16,21 +17,30 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-144px)] max-w-md items-center px-5 py-10">
-      <form action={submit} className="w-full rounded-lg border border-border bg-card p-6">
-        <h1 className="text-2xl font-semibold">Forgot Password</h1>
-        <input
-          className="mt-6 h-11 w-full rounded-md border border-border px-3"
-          name="email"
-          placeholder="Email"
-          required
-          type="email"
-        />
-        <button className="mt-6 h-11 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground">
-          Send Reset
-        </button>
-        {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
-      </form>
-    </section>
+    <PublicPageFrame
+      eyebrow="Account"
+      title="Forgot Password"
+      description="Request reset instructions for your customer account."
+    >
+      <section className="mx-auto max-w-md">
+        <form
+          action={submit}
+          className="w-full rounded-md border border-[#e5dac7] bg-[#fffaf1] p-6"
+        >
+          <h2 className="font-serif text-2xl uppercase text-[#3d1620]">Forgot Password</h2>
+          <input
+            className="mt-6 h-11 w-full rounded-md border border-border px-3"
+            name="email"
+            placeholder="Email"
+            required
+            type="email"
+          />
+          <button className="mt-6 h-11 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+            Send Reset
+          </button>
+          {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
+        </form>
+      </section>
+    </PublicPageFrame>
   );
 }

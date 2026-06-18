@@ -1,52 +1,74 @@
 import { Instagram, Mail, MapPin, Phone } from "lucide-react";
+import { ResponsiveImage } from "@/components/media/ResponsiveImage";
+import { defaultCmsContent, type CmsContent } from "@/lib/cms";
 
 const footerLinks = [
   {
     title: "Shop",
     links: [
-      { label: "New Arrivals", href: "/shop?sort=newest" },
-      { label: "Festive Edit", href: "/collections/festive-edit" },
+      { label: "Shop All", href: "/shop" },
+      { label: "New Arrivals", href: "/shop?sort=-newest" },
+      { label: "Best Sellers", href: "/shop?sort=-bestSelling" },
       { label: "Pre-Order", href: "/pre-order" },
-    ],
-  },
-  {
-    title: "Care",
-    links: [
-      { label: "Shipping", href: "/policies/shipping" },
-      { label: "Returns", href: "/policies/returns" },
-      { label: "Wash Care", href: "/policies/wash-care" },
-    ],
-  },
-  {
-    title: "Company",
-    links: [
       { label: "About", href: "/about" },
-      { label: "Blog", href: "/blog" },
-      { label: "Contact", href: "/contact" },
+    ],
+  },
+  {
+    title: "Customer",
+    links: [
+      { label: "Cart", href: "/cart" },
+      { label: "Wishlist", href: "/wishlist" },
+      { label: "Compare", href: "/compare" },
+      { label: "Track Order", href: "/track-order" },
+    ],
+  },
+  {
+    title: "Admin & Orders",
+    links: [
+      { label: "Admin Login", href: "/admin/login" },
+      { label: "Checkout", href: "/checkout" },
+      { label: "Payments", href: "/payments" },
+      { label: "Payment History", href: "/payments/history" },
     ],
   },
 ];
 
-export function Footer() {
+export function Footer({ cms }: Readonly<{ cms?: CmsContent }>) {
+  const content = cms ?? defaultCmsContent;
+  const logo = content.footer?.brandLogo;
+
   return (
-    <footer className="border-t border-border bg-surface-strong">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.4fr_2fr] lg:px-8">
+    <footer className="border-t border-[#e5dac7] bg-[#fffaf1]">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-10 md:grid-cols-[1.4fr_2fr]">
         <div>
-          <a className="text-lg font-semibold" href="/">
-            The Vastra House
+          <a className="inline-block" href="/">
+            {logo?.url ? (
+              <span className="block w-36">
+                <ResponsiveImage
+                  alt={logo.altText ?? "The Vastra House logo"}
+                  aspectRatio={logo.aspectRatio ?? "1:1"}
+                  objectFit={logo.objectFit ?? "contain"}
+                  src={logo.url}
+                />
+              </span>
+            ) : (
+              <span className="font-serif text-2xl uppercase tracking-[0.18em] text-[#8a6a42]">
+                Vastra House
+              </span>
+            )}
           </a>
-          <p className="mt-4 max-w-sm text-sm leading-6 text-muted-foreground">
-            Thoughtfully made Indian wear with polished details, comfortable fabrics, and
-            occasion-ready styling.
+          <p className="mt-4 max-w-sm text-sm leading-6 text-[#6f6256]">
+            {content.footer?.tagline ??
+              "Thoughtfully made Indian wear with polished details, comfortable fabrics, and occasion-ready styling."}
           </p>
-          <div className="mt-5 flex flex-wrap gap-3 text-sm text-muted-foreground">
+          <div className="mt-5 flex flex-wrap gap-3 text-sm text-[#6f6256]">
             <ContactLink href="mailto:hello@thevastrahouse.com" icon={<Mail size={16} />}>
               hello@thevastrahouse.com
             </ContactLink>
             <ContactLink href="tel:+910000000000" icon={<Phone size={16} />}>
               +91 00000 00000
             </ContactLink>
-            <ContactLink href="/contact" icon={<MapPin size={16} />}>
+            <ContactLink href="/track-order" icon={<MapPin size={16} />}>
               India
             </ContactLink>
           </div>
@@ -55,8 +77,10 @@ export function Footer() {
         <div className="grid gap-6 sm:grid-cols-3">
           {footerLinks.map((group) => (
             <div key={group.title}>
-              <h2 className="text-sm font-semibold">{group.title}</h2>
-              <nav className="mt-3 grid gap-2 text-sm text-muted-foreground">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-[#3b3128]">
+                {group.title}
+              </h2>
+              <nav className="mt-3 grid gap-2 text-sm text-[#6f6256]">
                 {group.links.map((link) => (
                   <a className="transition hover:text-primary" href={link.href} key={link.href}>
                     {link.label}
@@ -68,13 +92,10 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="border-t border-border">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <span>© 2026 The Vastra House</span>
-          <a
-            className="inline-flex items-center gap-2 transition hover:text-primary"
-            href="/social"
-          >
+      <div className="border-t border-[#e5dac7]">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-5 text-xs text-[#6f6256] sm:flex-row sm:items-center sm:justify-between">
+          <span>(c) 2026 The Vastra House</span>
+          <a className="inline-flex items-center gap-2 transition hover:text-primary" href="/">
             <Instagram aria-hidden="true" size={15} />
             Instagram
           </a>

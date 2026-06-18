@@ -16,6 +16,7 @@ import {
   rejectManualPayment,
   verifyRazorpayPayment,
 } from "../services/paymentService.js";
+import { getPaymentSettings, savePaymentSettings } from "../services/paymentSettingsService.js";
 
 export const paymentWebhookRouter = Router();
 export const paymentsRouter = Router();
@@ -43,6 +44,18 @@ const manualPaymentSchema = paymentInputSchema
   })
   .strict();
 
+const paymentSettingsSchema = z
+  .object({
+    bankAccountName: z.string().max(120).optional(),
+    bankAccountNumber: z.string().max(80).optional(),
+    bankIfsc: z.string().max(20).optional(),
+    bankName: z.string().max(120).optional(),
+    manualInstructions: z.string().max(1000).optional(),
+    upiId: z.string().min(3).max(120),
+    upiQrImageUrl: z.string().max(500).optional(),
+  })
+  .strict();
+
 paymentWebhookRouter.post(
   "/razorpay/webhook",
   express.raw({ type: "application/json" }),
@@ -60,7 +73,42 @@ paymentWebhookRouter.post(
   },
 );
 
+paymentsRouter.get("/settings", async (_req, res, next) => {
+  try {
+    res.json({ settings: await getPaymentSettings() });
+  } catch (error) {
+    next(error);
+  }
+});
+
 paymentsRouter.use(requireAuth);
+
+paymentsRouter.get(
+  "/admin/settings",
+  requirePermission({ module: "payments", action: "manage" }),
+  async (_req, res, next) => {
+    try {
+      res.json({ settings: await getPaymentSettings() });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+paymentsRouter.put(
+  "/admin/settings",
+  requirePermission({ module: "payments", action: "manage" }),
+  validateRequest({ body: paymentSettingsSchema }),
+  async (req, res, next) => {
+    try {
+      res.json({
+        settings: await savePaymentSettings({ ...req.body, updatedBy: req.user!.id }),
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 paymentsRouter.post(
   "/razorpay/orders",

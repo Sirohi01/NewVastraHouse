@@ -39,7 +39,7 @@ export function PaymentHistoryClient() {
           name="orderReference"
           placeholder="Filter by order reference"
         />
-        <button className="h-11 rounded-md bg-primary px-4 font-semibold text-primary-foreground">
+        <button className="h-11 rounded-md bg-primary px-4 font-semibold text-primary-foreground transition-opacity hover:opacity-90">
           Filter
         </button>
       </form>
@@ -58,7 +58,10 @@ export function PaymentHistoryClient() {
           </thead>
           <tbody>
             {history.map((item) => (
-              <tr className="border-t border-border" key={item._id}>
+              <tr
+                className="border-t border-border transition-colors hover:bg-muted/50"
+                key={item._id}
+              >
                 <td className="p-3 font-semibold">{item.orderReference}</td>
                 <td className="p-3">{item.method}</td>
                 <td className="p-3">{item.event}</td>

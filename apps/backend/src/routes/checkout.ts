@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { requireAuth } from "../middleware/authMiddleware.js";
+import { attachOptionalUser } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { Order } from "../models/Order.js";
 import { createOrderFromCheckout, previewCheckout } from "../services/checkoutService.js";
@@ -25,6 +25,7 @@ const checkoutSchema = z
   .object({
     shippingAddress: addressSchema,
     billingAddress: addressSchema.optional(),
+    guestEmail: z.string().email().optional(),
     shippingMethod: z.enum(["standard", "express"]),
     paymentMethod: z.enum(["razorpay", "cod", "manual_bank_transfer", "upi"]),
     paymentMode: z.enum(["full", "advance", "balance"]).optional(),
@@ -46,7 +47,7 @@ const checkoutSchema = z
   })
   .strict();
 
-checkoutRouter.use(requireAuth);
+checkoutRouter.use(attachOptionalUser);
 
 checkoutRouter.post(
   "/preview",
@@ -55,7 +56,13 @@ checkoutRouter.post(
   }),
   async (req, res, next) => {
     try {
-      res.json({ checkout: await previewCheckout({ ...req.body, userId: req.user!.id }) });
+      res.json({
+        checkout: await previewCheckout({
+          ...req.body,
+          guestSessionId: req.header("X-Guest-Session-Id"),
+          userId: req.user?.id,
+        }),
+      });
     } catch (error) {
       next(error);
     }
@@ -67,7 +74,11 @@ checkoutRouter.post(
   validateRequest({ body: checkoutSchema }),
   async (req, res, next) => {
     try {
-      const result = await createOrderFromCheckout({ ...req.body, userId: req.user!.id });
+      const result = await createOrderFromCheckout({
+        ...req.body,
+        guestSessionId: req.header("X-Guest-Session-Id"),
+        userId: req.user?.id,
+      });
       res.status(201).json(result);
     } catch (error) {
       next(error);
@@ -79,7 +90,7 @@ checkoutRouter.get("/orders/:orderNumber", async (req, res, next) => {
   try {
     const order = await Order.findOne({
       orderNumber: req.params.orderNumber,
-      userId: req.user!.id,
+      ...(req.user?.id ? { userId: req.user.id } : {}),
     }).lean();
 
     if (!order) {

@@ -7,12 +7,14 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ErrorState } from "@/components/states/ErrorState";
 import { fetchCheckoutOrder, type CheckoutOrder } from "@/lib/checkout";
 import { formatMoney } from "@/lib/commerce";
+import { createReturnRequest } from "@/lib/returns";
 import { useAuthStore } from "@/stores/authStore";
 
 export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber: string }>) {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [order, setOrder] = useState<CheckoutOrder>();
   const [message, setMessage] = useState("");
+  const [returnMessage, setReturnMessage] = useState("");
 
   useEffect(() => {
     async function loadOrder() {
@@ -27,14 +29,41 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
     void loadOrder();
   }, [accessToken, orderNumber]);
 
+  async function submitReturn(formData: FormData) {
+    if (!order) {
+      return;
+    }
+
+    try {
+      const result = await createReturnRequest(
+        {
+          items: [
+            {
+              quantity: Number(formData.get("quantity")),
+              reason: String(formData.get("reason")),
+              sku: String(formData.get("sku")),
+            },
+          ],
+          orderNumber: order.orderNumber,
+        },
+        accessToken,
+      );
+      setReturnMessage(`Return requested: ${result.returnRequest.returnNumber}`);
+    } catch (error) {
+      setReturnMessage(error instanceof Error ? error.message : "Return request failed");
+    }
+  }
+
   return (
     <ProtectedRoute>
       {message ? <ErrorState title="Order unavailable" message={message} /> : null}
       {order ? (
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <section className="rounded-lg border border-border bg-card p-6 shadow-soft">
-            <CheckCircle2 aria-hidden="true" className="text-accent" size={34} />
-            <h1 className="mt-4 text-3xl font-semibold">Order Confirmed</h1>
+            <CheckCircle2 aria-hidden="true" className="text-success" size={34} />
+            <h1 className="mt-4 font-serif text-3xl uppercase tracking-wide text-[#3d1620]">
+              Order Confirmed
+            </h1>
             <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
               <InfoRow label="Order" value={order.orderNumber} />
               <InfoRow label="Status" value={order.status} />
@@ -63,8 +92,8 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
 
           <aside className="h-fit rounded-lg border border-border bg-card p-5 shadow-soft">
             <div className="flex items-center gap-2">
-              <PackageCheck aria-hidden="true" className="text-accent" size={20} />
-              <h2 className="text-xl font-semibold">Summary</h2>
+              <PackageCheck aria-hidden="true" className="text-primary" size={20} />
+              <h2 className="font-serif text-xl uppercase tracking-wide text-[#3d1620]">Summary</h2>
             </div>
             <dl className="mt-5 grid gap-3 text-sm">
               <InfoRow
@@ -98,12 +127,62 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
               </div>
             </dl>
             <Link
-              className="mt-5 block h-11 rounded-md bg-primary px-4 py-2.5 text-center font-semibold text-primary-foreground"
+              className="mt-5 block h-11 rounded-md bg-primary px-4 py-2.5 text-center font-semibold text-primary-foreground transition-opacity hover:opacity-90"
               href="/shop"
             >
               Shop
             </Link>
           </aside>
+
+          {order.status === "delivered" ? (
+            <section className="rounded-lg border border-border bg-card p-5 shadow-soft lg:col-span-2">
+              <h2 className="font-serif text-xl uppercase tracking-wide text-[#3d1620]">
+                Return Request
+              </h2>
+              <form
+                action={submitReturn}
+                className="mt-4 grid gap-3 md:grid-cols-[1fr_120px_1fr_auto]"
+              >
+                <label className="text-sm font-medium">
+                  Item
+                  <select
+                    className="mt-2 h-10 w-full rounded-md border border-border px-3"
+                    name="sku"
+                  >
+                    {order.items.map((item) => (
+                      <option key={item.sku} value={item.sku}>
+                        {item.productName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-sm font-medium">
+                  Qty
+                  <input
+                    className="mt-2 h-10 w-full rounded-md border border-border px-3"
+                    min={1}
+                    name="quantity"
+                    required
+                    type="number"
+                  />
+                </label>
+                <label className="text-sm font-medium">
+                  Reason
+                  <input
+                    className="mt-2 h-10 w-full rounded-md border border-border px-3"
+                    name="reason"
+                    required
+                  />
+                </label>
+                <button className="h-10 self-end rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+                  Request
+                </button>
+              </form>
+              {returnMessage ? (
+                <p className="mt-3 text-sm text-muted-foreground">{returnMessage}</p>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       ) : message ? null : (
         <p className="text-sm text-muted-foreground">Loading order...</p>

@@ -30,11 +30,18 @@ const orderItemSchema = new Schema(
     hsnCode: { type: String, required: true, trim: true },
     gstRate: { type: Number, required: true, min: 0 },
     unitPrice: { type: Number, required: true, min: 0 },
+    costPrice: { type: Number, required: true, min: 0, default: 0 },
     quantity: { type: Number, required: true, min: 1 },
     lineSubtotal: { type: Number, required: true, min: 0 },
     taxableAmount: { type: Number, required: true, min: 0 },
     gstAmount: { type: Number, required: true, min: 0 },
     currencyCode: { type: String, required: true, trim: true, uppercase: true, default: "INR" },
+    preOrder: {
+      enabled: { type: Boolean, default: false },
+      expectedDispatchAt: { type: Date },
+      expectedDeliveryAt: { type: Date },
+      paymentMode: { type: String, enum: ["full", "advance"] },
+    },
   },
   { _id: false },
 );
@@ -82,6 +89,7 @@ const totalsSchema = new Schema(
 const stockReservationSchema = new Schema(
   {
     sku: { type: String, required: true, trim: true, uppercase: true },
+    warehouseId: { type: Schema.Types.ObjectId, ref: "Warehouse" },
     quantity: { type: Number, required: true, min: 1 },
     status: {
       type: String,
@@ -94,10 +102,23 @@ const stockReservationSchema = new Schema(
   { _id: false },
 );
 
+const shipmentSchema = new Schema(
+  {
+    carrier: { type: String, trim: true },
+    trackingNumber: { type: String, trim: true },
+    trackingUrl: { type: String, trim: true },
+    dispatchedAt: { type: Date },
+    deliveredAt: { type: Date },
+  },
+  { _id: false },
+);
+
 const orderSchema = new Schema(
   {
     orderNumber: { type: String, required: true, unique: true, trim: true, index: true },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    guestEmail: { type: String, lowercase: true, trim: true, index: true },
+    guestSessionId: { type: String, trim: true, index: true },
     cartId: { type: Schema.Types.ObjectId, ref: "Cart" },
     paymentSessionId: { type: Schema.Types.ObjectId, ref: "PaymentSession" },
     status: { type: String, enum: orderStatuses, required: true, index: true },
@@ -124,6 +145,7 @@ const orderSchema = new Schema(
     adjustments: [adjustmentSchema],
     taxBreakdown: [taxBreakdownSchema],
     totals: totalsSchema,
+    shipment: shipmentSchema,
     stockReservations: [stockReservationSchema],
     notes: { type: String, trim: true },
   },

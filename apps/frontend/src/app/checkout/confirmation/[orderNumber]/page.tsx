@@ -1,4 +1,5 @@
 import { OrderConfirmationClient } from "@/components/checkout/OrderConfirmationClient";
+import { PublicPageFrame } from "@/components/layout/PublicPageFrame";
 
 export const dynamic = "force-dynamic";
 
@@ -8,8 +9,12 @@ export default async function CheckoutConfirmationPage({
   const { orderNumber } = await params;
 
   return (
-    <main className="mx-auto min-h-[calc(100vh-144px)] max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <PublicPageFrame
+      eyebrow="Order Placed"
+      title="Order Confirmation"
+      description="Your order details, payment status, and next steps are shown below."
+    >
       <OrderConfirmationClient orderNumber={orderNumber} />
-    </main>
+    </PublicPageFrame>
   );
 }

@@ -20,7 +20,11 @@ export function validateRequest(schemas: RequestSchemas): RequestHandler {
       }
 
       if (schemas.query) {
-        req.query = parseStrict(schemas.query, req.query) as typeof req.query;
+        Object.defineProperty(req, "query", {
+          configurable: true,
+          enumerable: true,
+          value: parseStrict(schemas.query, req.query),
+        });
       }
 
       next();

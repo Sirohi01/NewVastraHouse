@@ -13,8 +13,21 @@ export type CartLineItem = {
   media?: MediaReference;
   unitPrice: number;
   currencyCode: string;
+  hsnCode?: string;
+  gstRate?: number;
   quantity: number;
   stockSnapshot: number;
+  preOrder?: {
+    enabled?: boolean;
+    startAt?: string;
+    endAt?: string;
+    expectedDispatchAt?: string;
+    expectedDeliveryAt?: string;
+    paymentMode?: "full" | "advance";
+    advancePercent?: number;
+    quantityCap?: number;
+    remainingQuantity?: number;
+  };
 };
 
 export type Cart = {
@@ -27,6 +40,9 @@ export type Cart = {
     giftPackagingFee: number;
     giftCardDiscount: number;
     grandTotal: number;
+    gstAmount?: number;
+    taxableAmount?: number;
+    taxBreakdown?: Array<{ gstRate: number; taxableAmount: number; gstAmount: number }>;
     currencyCode: string;
   };
 };

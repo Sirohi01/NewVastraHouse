@@ -12,9 +12,9 @@ export default async function ShopPage({ searchParams }: Readonly<ShopPageProps>
 
   return (
     <CatalogPage
-      description="Browse all active products with size, color, fabric, price, collection, tag, sort, and pagination support."
+      description="Timeless designs crafted with heritage, perfect for every moment."
       query={query}
-      title="Shop"
+      title="Shop The Collection"
     />
   );
 }

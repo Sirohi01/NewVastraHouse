@@ -1,6 +1,7 @@
 "use client";
 
 import { apiFetch } from "@/lib/api";
+import { getGuestSessionId } from "@/lib/commerce";
 import type { PaymentSession } from "@/lib/payments";
 
 export type CheckoutAddress = {
@@ -40,6 +41,12 @@ export type CheckoutLineItem = {
   gstAmount: number;
   gstRate: number;
   hsnCode: string;
+  preOrder?: {
+    enabled?: boolean;
+    expectedDeliveryAt?: string;
+    expectedDispatchAt?: string;
+    paymentMode?: "full" | "advance";
+  };
   currencyCode: string;
 };
 
@@ -62,6 +69,7 @@ export type CheckoutPaymentMode = "full" | "advance" | "balance";
 
 export type CheckoutPayload = {
   shippingAddress: CheckoutAddress;
+  guestEmail?: string;
   billingAddress?: CheckoutAddress;
   shippingMethod: CheckoutShippingMethod;
   paymentMethod: CheckoutPaymentMethod;
@@ -115,6 +123,7 @@ export function checkoutPreview(
   return apiFetch<{ checkout: CheckoutPreview }>("/checkout/preview", {
     accessToken,
     body: JSON.stringify(payload),
+    headers: { "X-Guest-Session-Id": getGuestSessionId() },
     method: "POST",
   });
 }
@@ -123,6 +132,7 @@ export function createCheckoutOrder(payload: CheckoutPayload, accessToken?: stri
   return apiFetch<CheckoutOrderResponse>("/checkout/orders", {
     accessToken,
     body: JSON.stringify(payload),
+    headers: { "X-Guest-Session-Id": getGuestSessionId() },
     method: "POST",
   });
 }

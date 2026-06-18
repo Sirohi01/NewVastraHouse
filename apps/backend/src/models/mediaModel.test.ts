@@ -12,6 +12,7 @@ test("Media model requires selected aspect ratio and preserves original URL", ()
     uploadContext: "product-media",
     mimeType: "image/jpeg",
     bytes: 1024,
+    altText: "Original product image",
     selectedAspectRatio: "4:5",
     renditions: [
       {

@@ -4,7 +4,7 @@ import { CreditCard, Landmark, PackageCheck, QrCode, Truck } from "lucide-react"
 import type { LucideIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ResponsiveImage } from "@/components/media/ResponsiveImage";
 import { EmptyState } from "@/components/states/EmptyState";
 import {
   checkoutPreview,
@@ -15,9 +15,16 @@ import {
   type CheckoutPreview,
   type CheckoutShippingMethod,
 } from "@/lib/checkout";
-import { formatMoney } from "@/lib/commerce";
-import { uploadPaymentScreenshot } from "@/lib/payments";
+import { commerceFetch, formatMoney, type Cart } from "@/lib/commerce";
+import {
+  fetchPaymentSettings,
+  uploadPaymentScreenshot,
+  type PaymentSettings,
+} from "@/lib/payments";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
+
+const steps = ["Order Type", "Address", "Payment", "Review"] as const;
 
 const paymentMethods: Array<{
   value: CheckoutPaymentMethod;
@@ -33,8 +40,12 @@ const paymentMethods: Array<{
 export function CheckoutClient() {
   const router = useRouter();
   const accessToken = useAuthStore((state) => state.accessToken);
+  const setCartStore = useCartStore((state) => state.setCart);
+  const [cart, setCart] = useState<Cart>();
+  const [step, setStep] = useState(0);
   const [shippingMethod, setShippingMethod] = useState<CheckoutShippingMethod>("standard");
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("razorpay");
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>();
   const [preview, setPreview] = useState<CheckoutPreview>();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -52,14 +63,52 @@ export function CheckoutClient() {
     [],
   );
 
+  const hasPreOrder = cart?.items.some((item) => item.preOrder?.enabled) ?? false;
+  const hasReadyStock = cart?.items.some((item) => !item.preOrder?.enabled) ?? false;
+  const requiredPaymentMode =
+    cart?.items.find((item) => item.preOrder?.enabled)?.preOrder?.paymentMode ?? "full";
+
+  useEffect(() => {
+    async function loadCart() {
+      try {
+        const payload = await commerceFetch<{ cart: Cart }>("/commerce/cart", { accessToken });
+        setCart(payload.cart);
+        setCartStore(payload.cart);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Cart could not load");
+      }
+    }
+
+    void loadCart();
+  }, [accessToken, setCartStore]);
+
+  useEffect(() => {
+    async function loadPaymentSettings() {
+      try {
+        const payload = await fetchPaymentSettings();
+        setPaymentSettings(payload.settings);
+      } catch {
+        setPaymentSettings(undefined);
+      }
+    }
+
+    void loadPaymentSettings();
+  }, []);
+
   useEffect(() => {
     setMessage("");
-  }, [paymentMethod, shippingMethod]);
+  }, [paymentMethod, shippingMethod, step]);
 
   async function refreshPreview(formData: FormData) {
     setMessage("Refreshing total...");
     try {
-      const payload = buildPayload(formData, defaultAddress, shippingMethod, paymentMethod);
+      const payload = buildPayload(
+        formData,
+        defaultAddress,
+        shippingMethod,
+        paymentMethod,
+        hasPreOrder ? requiredPaymentMode : undefined,
+      );
       const result = await checkoutPreview(
         {
           couponCode: payload.couponCode,
@@ -72,6 +121,7 @@ export function CheckoutClient() {
         accessToken,
       );
       setPreview(result.checkout);
+      setStep(3);
       setMessage("Total refreshed");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Checkout preview failed");
@@ -82,7 +132,13 @@ export function CheckoutClient() {
     setIsSubmitting(true);
     setMessage("Creating order...");
     try {
-      const payload = buildPayload(formData, defaultAddress, shippingMethod, paymentMethod);
+      const payload = buildPayload(
+        formData,
+        defaultAddress,
+        shippingMethod,
+        paymentMethod,
+        hasPreOrder ? requiredPaymentMode : undefined,
+      );
       const file = formData.get("manualScreenshot");
 
       if (payload.paymentMethod === "manual_bank_transfer") {
@@ -117,16 +173,76 @@ export function CheckoutClient() {
   }
 
   return (
-    <ProtectedRoute>
-      <form action={placeOrder} className="grid gap-6 lg:grid-cols-[1fr_360px]">
-        <div className="grid gap-5">
-          <section className="rounded-lg border border-border bg-card p-5 shadow-soft">
-            <div className="mb-4 flex items-center gap-2">
-              <PackageCheck aria-hidden="true" className="text-accent" size={20} />
-              <h2 className="text-lg font-semibold">Address</h2>
+    <form action={placeOrder} className="grid gap-4 lg:grid-cols-[1fr_330px]">
+      <div className="rounded-lg border border-border bg-card p-3 shadow-soft">
+        <div className="grid gap-2 sm:grid-cols-4">
+          {steps.map((label, index) => (
+            <button
+              className={`rounded-md px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                step === index
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground hover:bg-muted/70"
+              }`}
+              key={label}
+              onClick={() => setStep(index)}
+              type="button"
+            >
+              <span className="mr-2 opacity-70">{index + 1}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-4">
+          <section className={step === 0 ? "block" : "hidden"}>
+            <SectionTitle icon={PackageCheck} title="Order Type" />
+            <div className="grid gap-3">
+              <div className="rounded-md border border-border p-4">
+                <p className="text-sm font-semibold">
+                  {hasPreOrder && hasReadyStock
+                    ? "Mixed cart: ready stock + pre-order"
+                    : hasPreOrder
+                      ? "Pre-order checkout"
+                      : "Direct ready-stock order"}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Order type is detected from product availability and cannot be manually changed at
+                  checkout.
+                </p>
+              </div>
+              {cart?.items.length ? (
+                <div className="overflow-hidden rounded-md border border-border">
+                  {cart.items.map((item) => (
+                    <div
+                      className="grid gap-1 border-b border-border p-3 text-sm last:border-b-0 sm:grid-cols-[1fr_auto]"
+                      key={item._id}
+                    >
+                      <div>
+                        <p className="font-semibold">{item.productName}</p>
+                        <p className="text-muted-foreground">
+                          {item.sku} · Qty {item.quantity} ·{" "}
+                          {item.preOrder?.enabled
+                            ? `Pre-order, ${item.preOrder.paymentMode ?? "full"} payment`
+                            : "Ready stock"}
+                        </p>
+                      </div>
+                      <p className="font-semibold">
+                        {formatMoney(item.unitPrice * item.quantity, item.currencyCode)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="Cart pending" message="Cart items will appear here." />
+              )}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+          </section>
+
+          <section className={step === 1 ? "block" : "hidden"}>
+            <SectionTitle icon={PackageCheck} title="Address" />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field defaultValue={defaultAddress.fullName} label="Full name" name="fullName" />
+              <Field label="Email" name="guestEmail" required type="email" />
               <Field defaultValue={defaultAddress.phone} label="Phone" name="phone" />
               <Field
                 className="sm:col-span-2"
@@ -153,11 +269,8 @@ export function CheckoutClient() {
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-5 shadow-soft">
-            <div className="mb-4 flex items-center gap-2">
-              <Truck aria-hidden="true" className="text-accent" size={20} />
-              <h2 className="text-lg font-semibold">Shipping</h2>
-            </div>
+          <section className={step === 2 ? "block" : "hidden"}>
+            <SectionTitle icon={Truck} title="Shipping & Payment" />
             <div className="grid gap-3 sm:grid-cols-2">
               <OptionButton
                 checked={shippingMethod === "standard"}
@@ -174,14 +287,8 @@ export function CheckoutClient() {
                 value="express"
               />
             </div>
-          </section>
 
-          <section className="rounded-lg border border-border bg-card p-5 shadow-soft">
-            <div className="mb-4 flex items-center gap-2">
-              <CreditCard aria-hidden="true" className="text-accent" size={20} />
-              <h2 className="text-lg font-semibold">Payment</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {paymentMethods.map((method) => {
                 const Icon = method.icon;
 
@@ -208,11 +315,14 @@ export function CheckoutClient() {
                 );
               })}
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="text-sm font-medium">
                 Payment mode
                 <select
-                  className="mt-2 h-11 w-full rounded-md border border-border px-3"
+                  className="mt-2 h-10 w-full rounded-md border border-border px-3"
+                  defaultValue={hasPreOrder ? requiredPaymentMode : "full"}
+                  disabled={hasPreOrder}
                   name="paymentMode"
                 >
                   <option value="full">Full</option>
@@ -220,39 +330,46 @@ export function CheckoutClient() {
                   <option value="balance">Balance</option>
                 </select>
               </label>
+              {hasPreOrder ? (
+                <input name="paymentMode" type="hidden" value={requiredPaymentMode} />
+              ) : null}
               <Field label="Payable now" min={1} name="payableNow" type="number" />
               {paymentMethod === "manual_bank_transfer" ? (
-                <label className="text-sm font-medium sm:col-span-2">
-                  Payment proof
-                  <input
-                    className="mt-2 block w-full rounded-md border border-border p-2"
-                    name="manualScreenshot"
-                    type="file"
-                  />
-                </label>
+                <>
+                  <PaymentInstruction settings={paymentSettings} type="bank" />
+                  <label className="text-sm font-medium sm:col-span-2">
+                    Payment proof
+                    <input
+                      className="mt-2 block w-full rounded-md border border-border p-2"
+                      name="manualScreenshot"
+                      type="file"
+                    />
+                  </label>
+                </>
               ) : null}
               {paymentMethod === "upi" ? (
-                <Field className="sm:col-span-2" label="UPI reference" name="upiReference" />
+                <>
+                  <PaymentInstruction settings={paymentSettings} type="upi" />
+                  <Field className="sm:col-span-2" label="UPI reference" name="upiReference" />
+                </>
               ) : null}
             </div>
           </section>
 
-          <section className="rounded-lg border border-border bg-card p-5 shadow-soft">
-            <h2 className="text-lg font-semibold">Review</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <section className={step === 3 ? "block" : "hidden"}>
+            <SectionTitle icon={CreditCard} title="Review" />
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Coupon" name="couponCode" />
-              <Field label="Store credit" min={0} name="storeCreditRequested" type="number" />
-              <Field label="Reward value" min={0} name="rewardValueRequested" type="number" />
-              <label className="text-sm font-medium sm:col-span-3">
+              <label className="text-sm font-medium sm:col-span-2">
                 Notes
                 <textarea
-                  className="mt-2 min-h-24 w-full rounded-md border border-border p-3"
+                  className="mt-2 min-h-20 w-full rounded-md border border-border p-3"
                   name="notes"
                 />
               </label>
             </div>
             {preview?.items.length ? (
-              <div className="mt-5 overflow-hidden rounded-md border border-border">
+              <div className="mt-4 overflow-hidden rounded-md border border-border">
                 {preview.items.map((item) => (
                   <div
                     className="grid gap-2 border-b border-border p-3 text-sm last:border-b-0 sm:grid-cols-[1fr_auto]"
@@ -262,6 +379,7 @@ export function CheckoutClient() {
                       <p className="font-semibold">{item.productName}</p>
                       <p className="text-muted-foreground">
                         {item.sku} · Qty {item.quantity} · GST {item.gstRate}%
+                        {item.preOrder?.enabled ? " · Pre-order" : " · Direct order"}
                       </p>
                     </div>
                     <p className="font-semibold">
@@ -271,69 +389,141 @@ export function CheckoutClient() {
                 ))}
               </div>
             ) : (
-              <div className="mt-5">
+              <div className="mt-4">
                 <EmptyState
                   title="Review total"
-                  message="Refresh the order total before placing the order."
+                  message="Click refresh total after address and shipping are filled."
                 />
               </div>
             )}
           </section>
         </div>
+      </div>
 
-        <aside className="h-fit rounded-lg border border-border bg-card p-5 shadow-soft lg:sticky lg:top-24">
-          <h2 className="text-xl font-semibold">Order Summary</h2>
-          {preview ? (
-            <dl className="mt-5 grid gap-3 text-sm">
+      <aside className="h-fit rounded-lg border border-border bg-card p-4 shadow-soft lg:sticky lg:top-24">
+        <h2 className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">Order Summary</h2>
+        {preview ? (
+          <dl className="mt-4 grid gap-2 text-sm">
+            <TotalRow
+              label="Items"
+              value={formatMoney(preview.totals.itemSubtotal, preview.totals.currencyCode)}
+            />
+            <TotalRow
+              label="GST"
+              value={formatMoney(preview.totals.gstAmount, preview.totals.currencyCode)}
+            />
+            <TotalRow
+              label="Shipping"
+              value={formatMoney(preview.totals.shippingFee, preview.totals.currencyCode)}
+            />
+            <TotalRow
+              label="Gift packaging"
+              value={formatMoney(preview.totals.giftPackagingFee, preview.totals.currencyCode)}
+            />
+            <TotalRow
+              label="Discounts"
+              value={`-${formatMoney(preview.totals.discountTotal + preview.totals.giftCardDiscount + preview.totals.storeCreditApplied + preview.totals.rewardValueApplied, preview.totals.currencyCode)}`}
+            />
+            <div className="border-t border-border pt-2">
               <TotalRow
-                label="Items"
-                value={formatMoney(preview.totals.itemSubtotal, preview.totals.currencyCode)}
+                label="Total"
+                strong
+                value={formatMoney(preview.totals.grandTotal, preview.totals.currencyCode)}
               />
-              <TotalRow
-                label="GST"
-                value={formatMoney(preview.totals.gstAmount, preview.totals.currencyCode)}
-              />
-              <TotalRow
-                label="Shipping"
-                value={formatMoney(preview.totals.shippingFee, preview.totals.currencyCode)}
-              />
-              <TotalRow
-                label="Gift packaging"
-                value={formatMoney(preview.totals.giftPackagingFee, preview.totals.currencyCode)}
-              />
-              <TotalRow
-                label="Discounts"
-                value={`-${formatMoney(preview.totals.discountTotal + preview.totals.giftCardDiscount + preview.totals.storeCreditApplied + preview.totals.rewardValueApplied, preview.totals.currencyCode)}`}
-              />
-              <div className="border-t border-border pt-3">
-                <TotalRow
-                  label="Total"
-                  strong
-                  value={formatMoney(preview.totals.grandTotal, preview.totals.currencyCode)}
-                />
-              </div>
-            </dl>
+            </div>
+          </dl>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">Server total pending.</p>
+        )}
+
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            className="h-10 rounded-md border border-border px-3 text-sm font-semibold transition-colors hover:bg-muted disabled:opacity-40"
+            disabled={step === 0}
+            onClick={() => setStep((current) => Math.max(0, current - 1))}
+            type="button"
+          >
+            Back
+          </button>
+          {step < 2 ? (
+            <button
+              className="h-10 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+              onClick={() => setStep((current) => Math.min(3, current + 1))}
+              type="button"
+            >
+              Next
+            </button>
           ) : (
-            <p className="mt-3 text-sm text-muted-foreground">Server total pending.</p>
+            <button
+              className="h-10 rounded-md border border-primary px-3 text-sm font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              formAction={refreshPreview}
+              type="submit"
+            >
+              Refresh
+            </button>
           )}
-          <button
-            className="mt-5 h-11 w-full rounded-md border border-primary px-4 font-semibold text-primary"
-            formAction={refreshPreview}
-            type="submit"
-          >
-            Refresh Total
-          </button>
-          <button
-            className="mt-3 h-12 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            Place Order
-          </button>
-          {message ? <p className="mt-4 text-sm font-semibold text-accent">{message}</p> : null}
-        </aside>
-      </form>
-    </ProtectedRoute>
+        </div>
+        <button
+          className="mt-2 h-11 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={isSubmitting || !preview}
+          type="submit"
+        >
+          Place Order
+        </button>
+        {message ? <p className="mt-3 text-sm font-semibold text-accent">{message}</p> : null}
+      </aside>
+    </form>
+  );
+}
+
+function SectionTitle({ icon: Icon, title }: Readonly<{ icon: LucideIcon; title: string }>) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <Icon aria-hidden="true" className="text-primary" size={19} />
+      <h2 className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">{title}</h2>
+    </div>
+  );
+}
+
+function PaymentInstruction({
+  settings,
+  type,
+}: Readonly<{ settings?: PaymentSettings; type: "bank" | "upi" }>) {
+  if (!settings) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm sm:col-span-2">
+      {type === "upi" ? (
+        <>
+          <p className="font-semibold">Pay to UPI ID</p>
+          <p className="mt-1 text-muted-foreground">{settings.upiId}</p>
+          {settings.upiQrImageUrl ? (
+            <ResponsiveImage
+              alt="UPI payment QR code"
+              aspectRatio="1:1"
+              className="mt-3 w-36 rounded-md border border-border"
+              objectFit="contain"
+              src={settings.upiQrImageUrl}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="font-semibold">Bank transfer details</p>
+          <div className="mt-1 grid gap-1 text-muted-foreground">
+            {settings.bankName ? <span>Bank: {settings.bankName}</span> : null}
+            {settings.bankAccountName ? <span>Name: {settings.bankAccountName}</span> : null}
+            {settings.bankAccountNumber ? <span>A/C: {settings.bankAccountNumber}</span> : null}
+            {settings.bankIfsc ? <span>IFSC: {settings.bankIfsc}</span> : null}
+          </div>
+          {settings.manualInstructions ? (
+            <p className="mt-2 text-muted-foreground">{settings.manualInstructions}</p>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -349,7 +539,7 @@ function Field({
   return (
     <label className={`text-sm font-medium ${className}`}>
       {label}
-      <input className="mt-2 h-11 w-full rounded-md border border-border px-3" {...props} />
+      <input className="mt-2 h-10 w-full rounded-md border border-border px-3" {...props} />
     </label>
   );
 }
@@ -369,7 +559,7 @@ function OptionButton({
 }>) {
   return (
     <label
-      className={`cursor-pointer rounded-md border p-4 text-sm font-semibold ${
+      className={`cursor-pointer rounded-md border p-3 text-sm font-semibold ${
         checked ? "border-primary bg-primary/5 text-primary" : "border-border"
       }`}
     >
@@ -404,6 +594,7 @@ function buildPayload(
   fallbackAddress: CheckoutAddress,
   shippingMethod: CheckoutShippingMethod,
   paymentMethod: CheckoutPaymentMethod,
+  lockedPaymentMode?: "full" | "advance",
 ): CheckoutPayload {
   const shippingAddress = {
     city: text(formData, "city") || fallbackAddress.city,
@@ -418,10 +609,13 @@ function buildPayload(
 
   return {
     couponCode: text(formData, "couponCode") || undefined,
+    guestEmail: text(formData, "guestEmail") || undefined,
     notes: text(formData, "notes") || undefined,
     payableNow: numberOrUndefined(formData, "payableNow"),
     paymentMethod,
-    paymentMode: (text(formData, "paymentMode") || "full") as "full" | "advance" | "balance",
+    paymentMode:
+      lockedPaymentMode ??
+      ((text(formData, "paymentMode") || "full") as "full" | "advance" | "balance"),
     rewardValueRequested: numberOrUndefined(formData, "rewardValueRequested"),
     shippingAddress,
     shippingMethod,

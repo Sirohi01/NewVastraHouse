@@ -8,18 +8,21 @@ import { AbandonedCartEvent } from "../models/AbandonedCartEvent.js";
 import { Cart } from "../models/Cart.js";
 import { GiftCard } from "../models/GiftCard.js";
 import { Product } from "../models/Product.js";
+import { StockLedger } from "../models/StockLedger.js";
 import { emitAbandonedCartEvents, mergeGuestCartIntoUserCart } from "../services/cartService.js";
 
 test("cart add-to-cart uses server-side product price and placeholder stock", async (t) => {
   const originalProductFindOne = Product.findOne;
   const originalCartFindOne = Cart.findOne;
   const originalCartCreate = Cart.create;
+  const originalStockLedgerFind = StockLedger.find;
   const productId = new Types.ObjectId();
   const variantId = new Types.ObjectId();
   let cart: InstanceType<typeof Cart> | undefined;
 
   (Product as unknown as { findOne: unknown }).findOne = () =>
     chain(buildProduct(productId, variantId));
+  (StockLedger as unknown as { find: unknown }).find = () => chain([]);
   (Cart as unknown as { findOne: unknown }).findOne = () => Promise.resolve(cart ?? null);
   (Cart as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
     cart = makeCart(payload);
@@ -29,6 +32,7 @@ test("cart add-to-cart uses server-side product price and placeholder stock", as
     (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
     (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
     (Cart as unknown as { create: unknown }).create = originalCartCreate;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
   });
 
   const { close, url } = await listen();
@@ -50,6 +54,46 @@ test("cart add-to-cart uses server-side product price and placeholder stock", as
   assert.equal(payload.cart.items[0].unitPrice, 1999);
   assert.equal(payload.cart.items[0].quantity, 2);
   assert.equal(payload.cart.totals.subtotal, 3998);
+});
+
+test("cart add-to-cart uses inventory ledger stock before product placeholder stock", async (t) => {
+  const originalProductFindOne = Product.findOne;
+  const originalCartFindOne = Cart.findOne;
+  const originalCartCreate = Cart.create;
+  const originalStockLedgerFind = StockLedger.find;
+  const productId = new Types.ObjectId();
+  const variantId = new Types.ObjectId();
+  let cart: InstanceType<typeof Cart> | undefined;
+
+  (Product as unknown as { findOne: unknown }).findOne = () =>
+    chain(buildProduct(productId, variantId, 8));
+  (StockLedger as unknown as { find: unknown }).find = () =>
+    chain([{ available: 1, sku: "TVH-SILK-M-0001" }]);
+  (Cart as unknown as { findOne: unknown }).findOne = () => Promise.resolve(cart ?? null);
+  (Cart as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    cart = makeCart(payload);
+    return Promise.resolve(cart);
+  };
+  t.after(() => {
+    (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
+    (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
+    (Cart as unknown as { create: unknown }).create = originalCartCreate;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
+  });
+
+  const { close, url } = await listen();
+  t.after(close);
+
+  const response = await fetch(`${url}/api/${API_VERSION}/commerce/cart/items`, {
+    body: JSON.stringify({ productId, quantity: 2, variantId }),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Guest-Session-Id": "guest-session-phase-12-ledger",
+    },
+    method: "POST",
+  });
+
+  assert.equal(response.status, 409);
 });
 
 test("cart gift packaging and gift card redemption update totals", async (t) => {
@@ -128,6 +172,7 @@ test("guest cart merges into logged-in cart without trusting stale quantities", 
   const originalProductFindOne = Product.findOne;
   const originalCartFindOne = Cart.findOne;
   const originalCartDeleteOne = Cart.deleteOne;
+  const originalStockLedgerFind = StockLedger.find;
   const productId = new Types.ObjectId();
   const variantId = new Types.ObjectId();
   const guestCart = makeCart({
@@ -142,6 +187,7 @@ test("guest cart merges into logged-in cart without trusting stale quantities", 
 
   (Product as unknown as { findOne: unknown }).findOne = () =>
     chain(buildProduct(productId, variantId, 4));
+  (StockLedger as unknown as { find: unknown }).find = () => chain([]);
   (Cart as unknown as { findOne: unknown }).findOne = (filter: { guestSessionId?: string }) =>
     Promise.resolve(filter.guestSessionId ? guestCart : userCart);
   (Cart as unknown as { deleteOne: unknown }).deleteOne = () => {
@@ -152,6 +198,7 @@ test("guest cart merges into logged-in cart without trusting stale quantities", 
     (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
     (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
     (Cart as unknown as { deleteOne: unknown }).deleteOne = originalCartDeleteOne;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
   });
 
   const merged = await mergeGuestCartIntoUserCart("guest-session-merge", String(userCart.userId));

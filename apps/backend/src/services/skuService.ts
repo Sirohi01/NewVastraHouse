@@ -25,6 +25,20 @@ export function generateSku({
   return `${prefix}-${productPart}-${colorPart}-${sizePart}-${sequencePart}`;
 }
 
+export function generateBarcode(sku: string): string {
+  const numeric = sku
+    .split("")
+    .map((character) => character.charCodeAt(0))
+    .join("")
+    .slice(0, 11)
+    .padEnd(11, "0");
+  const checksum = numeric
+    .split("")
+    .reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
+
+  return `${numeric}${(10 - (checksum % 10)) % 10}`;
+}
+
 function normalizeSkuPart(value: string, length: number): string {
   return (
     value

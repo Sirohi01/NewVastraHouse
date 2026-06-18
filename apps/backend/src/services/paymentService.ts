@@ -7,9 +7,13 @@ import { PaymentHistory } from "../models/PaymentHistory.js";
 import { PaymentSession } from "../models/PaymentSession.js";
 import { PaymentWebhookEvent } from "../models/PaymentWebhookEvent.js";
 import { writeAuditLog } from "./auditLogService.js";
+import { getPaymentSettings } from "./paymentSettingsService.js";
+import { getRuntimeNumberSetting } from "./runtimeSettingsService.js";
 
 export type CreatePaymentInput = {
-  userId: string;
+  userId?: string;
+  guestEmail?: string;
+  guestSessionId?: string;
   orderReference: string;
   amount: number;
   payableNow?: number;
@@ -40,7 +44,9 @@ type RazorpayOrder = {
 
 type PaymentSessionDoc = HydratedDocument<{
   _id: Types.ObjectId;
-  userId: Types.ObjectId;
+  userId?: Types.ObjectId;
+  guestEmail?: string;
+  guestSessionId?: string;
   orderReference: string;
   method: "razorpay" | "cod" | "manual_bank_transfer" | "upi";
   status:
@@ -73,6 +79,8 @@ export async function createRazorpayPayment(input: CreatePaymentInput) {
   const amounts = normalizeAmounts(input.amount, input.payableNow);
   const session = await PaymentSession.create({
     userId: input.userId,
+    guestEmail: input.guestEmail,
+    guestSessionId: input.guestSessionId,
     orderReference: input.orderReference,
     method: "razorpay",
     status: "pending_payment",
@@ -193,8 +201,14 @@ export async function handleRazorpayWebhook(rawBody: Buffer, signature: string |
 
 export async function createCodPayment(input: CreatePaymentInput) {
   const amounts = normalizeAmounts(input.amount, input.payableNow);
+  const reviewThreshold = await getRuntimeNumberSetting(
+    "COD_MANUAL_REVIEW_THRESHOLD",
+    env.COD_MANUAL_REVIEW_THRESHOLD,
+  );
   const session = await PaymentSession.create({
     userId: input.userId,
+    guestEmail: input.guestEmail,
+    guestSessionId: input.guestSessionId,
     orderReference: input.orderReference,
     method: "cod",
     status: "cod_confirmed",
@@ -204,7 +218,7 @@ export async function createCodPayment(input: CreatePaymentInput) {
     outstandingAmount: amounts.amount,
     currencyCode: input.currencyCode ?? "INR",
     paymentMode: "balance",
-    codManualReviewRequired: amounts.amount >= env.COD_MANUAL_REVIEW_THRESHOLD,
+    codManualReviewRequired: amounts.amount >= reviewThreshold,
   });
 
   await recordPaymentHistory(session, "cod_confirmed", "customer", {
@@ -217,6 +231,8 @@ export async function createManualPayment(input: ManualPaymentInput) {
   const amounts = normalizeAmounts(input.amount, input.payableNow);
   const session = await PaymentSession.create({
     userId: input.userId,
+    guestEmail: input.guestEmail,
+    guestSessionId: input.guestSessionId,
     orderReference: input.orderReference,
     method: "manual_bank_transfer",
     status: "payment_verification_pending",
@@ -235,8 +251,11 @@ export async function createManualPayment(input: ManualPaymentInput) {
 
 export async function createUpiPayment(input: UpiPaymentInput) {
   const amounts = normalizeAmounts(input.amount, input.payableNow);
+  const settings = await getPaymentSettings();
   const session = await PaymentSession.create({
     userId: input.userId,
+    guestEmail: input.guestEmail,
+    guestSessionId: input.guestSessionId,
     orderReference: input.orderReference,
     method: "upi",
     status: "upi_pending",
@@ -246,7 +265,7 @@ export async function createUpiPayment(input: UpiPaymentInput) {
     outstandingAmount: amounts.amount,
     currencyCode: input.currencyCode ?? "INR",
     paymentMode: input.paymentMode ?? (amounts.payableNow < amounts.amount ? "advance" : "full"),
-    upiId: env.UPI_PAYMENT_ADDRESS,
+    upiId: settings.upiId,
     upiReference: input.upiReference,
   });
 

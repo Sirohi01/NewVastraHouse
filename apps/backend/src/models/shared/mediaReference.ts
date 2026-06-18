@@ -17,9 +17,9 @@ export const mediaReferenceSchema = new Schema<MediaReference>(
   {
     mediaId: { type: Schema.Types.ObjectId, ref: "Media" },
     url: { type: String, required: true, trim: true },
-    altText: { type: String, trim: true },
+    altText: { type: String, required: true, trim: true },
     type: { type: String, enum: ["image", "video", "pdf", "lookbook"], required: true },
-    aspectRatio: { type: String, enum: aspectRatios },
+    aspectRatio: { type: String, enum: aspectRatios, required: true },
     objectFit: { type: String, enum: ["cover", "contain"], default: "cover" },
   },
   { _id: false },

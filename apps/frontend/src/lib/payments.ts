@@ -43,6 +43,16 @@ export type PaymentHistoryItem = {
   createdAt?: string;
 };
 
+export type PaymentSettings = {
+  upiId: string;
+  upiQrImageUrl?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankIfsc?: string;
+  bankName?: string;
+  manualInstructions?: string;
+};
+
 export async function paymentFetch<T>(
   path: string,
   accessToken: string | undefined,
@@ -69,6 +79,22 @@ export async function uploadPaymentScreenshot(formData: FormData, accessToken?: 
   return response.json() as Promise<{
     media: { secureUrl: string; selectedAspectRatio?: string; altText?: string };
   }>;
+}
+
+export function fetchPaymentSettings() {
+  return apiFetch<{ settings: PaymentSettings }>("/payments/settings");
+}
+
+export function fetchAdminPaymentSettings(accessToken?: string) {
+  return apiFetch<{ settings: PaymentSettings }>("/payments/admin/settings", { accessToken });
+}
+
+export function saveAdminPaymentSettings(settings: PaymentSettings, accessToken?: string) {
+  return apiFetch<{ settings: PaymentSettings }>("/payments/admin/settings", {
+    accessToken,
+    body: JSON.stringify(settings),
+    method: "PUT",
+  });
 }
 
 export function formatPaymentMoney(value: number, currencyCode = "INR") {

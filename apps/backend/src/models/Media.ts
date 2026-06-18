@@ -32,7 +32,7 @@ const mediaSchema = new Schema(
       height: { type: Number, min: 1 },
     },
     objectFit: { type: String, enum: ["cover", "contain"], default: "cover" },
-    altText: { type: String, trim: true },
+    altText: { type: String, required: true, trim: true },
     tags: [{ type: String, trim: true, lowercase: true }],
     renditions: [renditionSchema],
     uploadedBy: { type: Schema.Types.ObjectId, ref: "User" },

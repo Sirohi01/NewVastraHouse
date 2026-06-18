@@ -191,14 +191,16 @@ export function PaymentMethodClient() {
               />
             </label>
           </div>
-          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 font-semibold text-primary-foreground">
+          <button className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-primary px-4 font-semibold text-primary-foreground transition-opacity hover:opacity-90">
             <CreditCard aria-hidden="true" size={18} />
             Create Payment
           </button>
         </form>
 
         <aside className="h-fit rounded-lg border border-border bg-card p-5 shadow-soft">
-          <h2 className="text-xl font-semibold">Payment Status</h2>
+          <h2 className="font-serif text-xl uppercase tracking-wide text-[#3d1620]">
+            Payment Status
+          </h2>
           {session ? (
             <dl className="mt-4 grid gap-3 text-sm">
               <StatusRow label="Order" value={session.orderReference} />
@@ -237,7 +239,9 @@ export function PaymentMethodClient() {
           action={confirmRazorpay}
           className="rounded-lg border border-border bg-card p-5 shadow-soft lg:col-span-2"
         >
-          <h2 className="text-xl font-semibold">Razorpay Server Verification</h2>
+          <h2 className="font-serif text-xl uppercase tracking-wide text-[#3d1620]">
+            Razorpay Server Verification
+          </h2>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <input
               className="h-11 rounded-md border border-border px-3"
@@ -256,7 +260,7 @@ export function PaymentMethodClient() {
               placeholder="Signature"
             />
           </div>
-          <button className="mt-4 h-11 rounded-md border border-primary px-4 font-semibold text-primary">
+          <button className="mt-4 h-11 rounded-md border border-primary px-4 font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground">
             Verify
           </button>
         </form>

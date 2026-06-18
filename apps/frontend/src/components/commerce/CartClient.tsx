@@ -7,10 +7,12 @@ import { ResponsiveImage } from "@/components/media/ResponsiveImage";
 import { EmptyState } from "@/components/states/EmptyState";
 import { commerceFetch, formatMoney, type Cart } from "@/lib/commerce";
 import { useAuthStore } from "@/stores/authStore";
+import { useCartStore } from "@/stores/cartStore";
 
 export function CartClient() {
   const accessToken = useAuthStore((state) => state.accessToken);
-  const [cart, setCart] = useState<Cart>();
+  const setCartStore = useCartStore((state) => state.setCart);
+  const [cart, setCartState] = useState<Cart>();
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -20,10 +22,15 @@ export function CartClient() {
   async function loadCart() {
     try {
       const payload = await commerceFetch<{ cart: Cart }>("/commerce/cart", { accessToken });
-      setCart(payload.cart);
+      applyCart(payload.cart);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Cart could not load");
     }
+  }
+
+  function applyCart(nextCart: Cart) {
+    setCartState(nextCart);
+    setCartStore(nextCart);
   }
 
   async function updateQuantity(lineItemId: string, quantity: number) {
@@ -36,7 +43,7 @@ export function CartClient() {
       body: JSON.stringify({ quantity }),
       method: "PATCH",
     });
-    setCart(payload.cart);
+    applyCart(payload.cart);
   }
 
   async function removeLine(lineItemId: string) {
@@ -44,7 +51,7 @@ export function CartClient() {
       accessToken,
       method: "DELETE",
     });
-    setCart(payload.cart);
+    applyCart(payload.cart);
   }
 
   async function setGiftPackaging(enabled: boolean) {
@@ -53,7 +60,7 @@ export function CartClient() {
       body: JSON.stringify({ enabled }),
       method: "PATCH",
     });
-    setCart(payload.cart);
+    applyCart(payload.cart);
   }
 
   async function applyGiftCard(formData: FormData) {
@@ -62,7 +69,7 @@ export function CartClient() {
       body: JSON.stringify({ code: formData.get("code") }),
       method: "POST",
     });
-    setCart(payload.cart);
+    applyCart(payload.cart);
   }
 
   if (!cart) {
@@ -75,12 +82,15 @@ export function CartClient() {
     );
   }
 
+  const taxBreakdown = cart.totals.taxBreakdown?.filter((tax) => tax.gstAmount > 0) ?? [];
+  const giftCardDiscount = cart.totals.giftCardDiscount;
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
       <div className="grid gap-4">
         {cart.items.map((item) => (
           <article
-            className="grid gap-4 rounded-lg border border-border bg-card p-4 shadow-soft sm:grid-cols-[120px_1fr]"
+            className="grid gap-4 rounded-lg border border-border bg-card p-4 shadow-soft transition-shadow duration-200 hover:shadow-lifted sm:grid-cols-[120px_1fr]"
             key={item._id}
           >
             <Link href={`/shop/${item.slug}`}>
@@ -105,7 +115,18 @@ export function CartClient() {
                   </Link>
                   <p className="mt-1 text-sm text-muted-foreground">{item.sku}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
+                    {item.preOrder?.enabled
+                      ? `Pre-order${
+                          item.preOrder.paymentMode === "advance"
+                            ? ` · ${item.preOrder.advancePercent ?? 0}% advance`
+                            : " · full payment"
+                        }`
+                      : "Ready stock · direct order"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
                     Stock checked: {item.stockSnapshot}
+                    {item.gstRate ? ` · GST ${item.gstRate}% included` : ""}
+                    {item.hsnCode ? ` · HSN ${item.hsnCode}` : ""}
                   </p>
                 </div>
                 <p className="font-semibold">{formatMoney(item.unitPrice, item.currencyCode)}</p>
@@ -113,7 +134,7 @@ export function CartClient() {
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center rounded-md border border-border">
                   <button
-                    className="grid size-10 place-items-center"
+                    className="grid size-10 place-items-center transition-colors hover:bg-muted"
                     onClick={() => updateQuantity(item._id, item.quantity - 1)}
                     type="button"
                   >
@@ -121,7 +142,7 @@ export function CartClient() {
                   </button>
                   <span className="w-10 text-center text-sm font-semibold">{item.quantity}</span>
                   <button
-                    className="grid size-10 place-items-center"
+                    className="grid size-10 place-items-center transition-colors hover:bg-muted"
                     onClick={() => updateQuantity(item._id, item.quantity + 1)}
                     type="button"
                   >
@@ -129,7 +150,7 @@ export function CartClient() {
                   </button>
                 </div>
                 <button
-                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive"
+                  className="inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
                   onClick={() => removeLine(item._id)}
                   type="button"
                 >
@@ -143,7 +164,7 @@ export function CartClient() {
       </div>
 
       <aside className="h-fit rounded-lg border border-border bg-card p-5 shadow-soft">
-        <h2 className="text-xl font-semibold">Summary</h2>
+        <h2 className="font-serif text-xl uppercase tracking-wide text-[#3d1620]">Summary</h2>
         <label className="mt-5 flex items-center gap-3 rounded-md border border-border p-3">
           <input
             checked={Boolean(cart.giftPackaging?.enabled)}
@@ -161,23 +182,36 @@ export function CartClient() {
             name="code"
             placeholder="Gift card code"
           />
-          <button className="h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground">
+          <button className="h-11 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90">
             Apply
           </button>
         </form>
         <dl className="mt-5 grid gap-3 text-sm">
           <TotalRow
-            label="Subtotal"
+            label="Subtotal incl. GST"
             value={formatMoney(cart.totals.subtotal, cart.totals.currencyCode)}
           />
+          <TotalRow
+            label="Taxable value"
+            value={formatMoney(cart.totals.taxableAmount ?? 0, cart.totals.currencyCode)}
+          />
+          {taxBreakdown.map((tax) => (
+            <TotalRow
+              key={tax.gstRate}
+              label={`GST ${tax.gstRate}%`}
+              value={formatMoney(tax.gstAmount, cart.totals.currencyCode)}
+            />
+          ))}
           <TotalRow
             label="Gift packaging"
             value={formatMoney(cart.totals.giftPackagingFee, cart.totals.currencyCode)}
           />
-          <TotalRow
-            label="Gift card"
-            value={`-${formatMoney(cart.totals.giftCardDiscount, cart.totals.currencyCode)}`}
-          />
+          {giftCardDiscount > 0 ? (
+            <TotalRow
+              label="Gift card"
+              value={`-${formatMoney(giftCardDiscount, cart.totals.currencyCode)}`}
+            />
+          ) : null}
           <div className="border-t border-border pt-3">
             <TotalRow
               label="Total"
@@ -187,7 +221,7 @@ export function CartClient() {
           </div>
         </dl>
         <Link
-          className="mt-5 block h-12 rounded-md bg-primary px-4 py-3 text-center font-semibold text-primary-foreground"
+          className="mt-5 block h-12 rounded-md bg-primary px-4 py-3 text-center font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           href="/checkout"
         >
           Checkout

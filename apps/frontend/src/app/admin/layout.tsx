@@ -1,5 +1,5 @@
-import { AppProviders } from "@/components/providers/AppProviders";
+import { AdminLayoutClient } from "@/components/admin/AdminLayoutClient";
 
 export default function AdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <AppProviders>{children}</AppProviders>;
+  return <AdminLayoutClient>{children}</AdminLayoutClient>;
 }

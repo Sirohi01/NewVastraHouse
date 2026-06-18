@@ -24,7 +24,7 @@ const uploadBodySchema = z
     customHeight: z.coerce.number().int().positive().optional(),
     context: z.enum(["product-media", "payment-screenshot", "review-photo", "catalog-pdf"]),
     objectFit: z.enum(["cover", "contain"]).default("cover"),
-    altText: z.string().max(160).optional(),
+    altText: z.string().min(3).max(160),
     tags: z.string().optional(),
   })
   .strict()
@@ -55,12 +55,22 @@ mediaRouter.post(
         req.body.aspectRatio === "custom"
           ? { width: req.body.customWidth, height: req.body.customHeight }
           : undefined;
-      const renditions = buildRenditions(
-        uploadResult.public_id,
-        req.body.aspectRatio,
-        deliveryType,
-        customAspectRatio,
-      );
+      const renditions =
+        detectedFile.resourceType === "video"
+          ? [
+              {
+                format: uploadResult.format,
+                height: uploadResult.height ?? 1080,
+                url: uploadResult.secure_url,
+                width: uploadResult.width ?? 1080,
+              },
+            ]
+          : buildRenditions(
+              uploadResult.public_id,
+              req.body.aspectRatio,
+              deliveryType,
+              customAspectRatio,
+            );
       const media = await Media.create({
         originalUrl: uploadResult.secure_url,
         secureUrl: renditions[0].url,

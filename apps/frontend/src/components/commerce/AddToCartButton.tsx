@@ -3,6 +3,7 @@
 import { ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { commerceFetch, type Cart } from "@/lib/commerce";
+import { useCartStore } from "@/stores/cartStore";
 import { useAuthStore } from "@/stores/authStore";
 
 export function AddToCartButton({
@@ -11,6 +12,7 @@ export function AddToCartButton({
   variantId,
 }: Readonly<{ productId: string; quantity?: number; variantId: string }>) {
   const accessToken = useAuthStore((state) => state.accessToken);
+  const setCart = useCartStore((state) => state.setCart);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,11 +21,12 @@ export function AddToCartButton({
     setMessage("");
 
     try {
-      await commerceFetch<{ cart: Cart }>("/commerce/cart/items", {
+      const payload = await commerceFetch<{ cart: Cart }>("/commerce/cart/items", {
         accessToken,
         body: JSON.stringify({ productId, quantity, variantId }),
         method: "POST",
       });
+      setCart(payload.cart);
       setMessage("Added to cart");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Add to cart failed");
@@ -35,7 +38,7 @@ export function AddToCartButton({
   return (
     <div>
       <button
-        className="inline-flex h-12 items-center gap-2 rounded-md bg-primary px-5 font-semibold text-primary-foreground disabled:opacity-60"
+        className="inline-flex h-12 items-center gap-2 rounded-md bg-primary px-5 font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
         disabled={submitting}
         onClick={addToCart}
         type="button"

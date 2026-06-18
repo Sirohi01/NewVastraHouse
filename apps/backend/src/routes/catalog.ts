@@ -8,11 +8,13 @@ import { requireAuth, requirePermission } from "../middleware/authMiddleware.js"
 import { validateRequest } from "../middleware/validateRequest.js";
 import { Category } from "../models/Category.js";
 import { Collection } from "../models/Collection.js";
+import { Brand } from "../models/Brand.js";
 import { Product } from "../models/Product.js";
+import { Warehouse } from "../models/Warehouse.js";
 import { ProductReview } from "../models/ProductReview.js";
 import { Tag } from "../models/Tag.js";
 import { createSlug } from "../services/slugService.js";
-import { generateSku } from "../services/skuService.js";
+import { generateBarcode, generateSku } from "../services/skuService.js";
 import { computeBadges, recomputeProductBadges } from "../services/merchandisingBadgeService.js";
 import { validateGstRate } from "../services/taxValidationService.js";
 import { buildPaginatedResult, parsePagination } from "../utils/pagination.js";
@@ -27,13 +29,37 @@ const gstRateSchema = z.coerce.number().refine(validateGstRate, "GST rate is not
 const mediaReferenceSchema = z
   .object({
     mediaId: objectIdSchema.optional(),
-    url: z.string().url(),
-    altText: z.string().max(160).optional(),
+    url: z.string().min(1).refine(isMediaUrl, "Media URL must be absolute or site-relative"),
+    altText: z.string().min(3).max(160),
     type: z.enum(["image", "video", "pdf", "lookbook"]),
-    aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3", "custom"]).optional(),
+    aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3", "custom"]),
     objectFit: z.enum(["cover", "contain"]).optional(),
   })
   .strict();
+
+function isMediaUrl(value: string) {
+  return value.startsWith("/") || z.string().url().safeParse(value).success;
+}
+
+const preOrderInputSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    startAt: z.coerce.date().optional(),
+    endAt: z.coerce.date().optional(),
+    expectedDispatchAt: z.coerce.date().optional(),
+    expectedDeliveryAt: z.coerce.date().optional(),
+    paymentMode: z.enum(["full", "advance"]).default("full"),
+    advancePercent: z.coerce.number().int().min(1).max(99).default(50),
+    quantityCap: z.coerce.number().int().min(0).default(0),
+    remainingQuantity: z.coerce.number().int().min(0).optional(),
+  })
+  .strict()
+  .refine((value) => !value.enabled || (value.startAt && value.endAt), {
+    message: "Pre-order start and end dates are required",
+  })
+  .refine((value) => !value.startAt || !value.endAt || value.startAt <= value.endAt, {
+    message: "Pre-order end date must be after start date",
+  });
 
 const seoSchema = z
   .object({
@@ -53,8 +79,10 @@ const variantInputSchema = z
     barcode: z.string().max(80).optional(),
     basePrice: z.coerce.number().min(0),
     salePrice: z.coerce.number().min(0).optional(),
+    costPrice: z.coerce.number().min(0).default(0),
     currencyCode: z.string().length(3).default("INR"),
     stockPlaceholder: z.coerce.number().int().min(0).default(0),
+    preOrder: preOrderInputSchema.optional(),
     priceTiers: z
       .array(
         z
@@ -82,6 +110,7 @@ const productInputSchema = z
     fabricDetails: z.string().optional(),
     washCare: z.string().optional(),
     sizeGuide: z.string().optional(),
+    sizeGuideMedia: mediaReferenceSchema.optional(),
     hsnCode: z.string().regex(/^\d{4,8}$/),
     gstRate: gstRateSchema,
     categoryIds: z.array(objectIdSchema).default([]),
@@ -160,6 +189,8 @@ type ProductSlugPayload = { slug?: string };
 type ProductIdPayload = { _id: unknown };
 
 catalogRouter.get("/products", listPublicProducts);
+catalogRouter.get("/home", getCatalogHome);
+catalogRouter.get("/filters", getCatalogFilters);
 catalogRouter.get("/products/:slug/pdp", getProductPdp);
 catalogRouter.get("/products/:slug/reviews", listProductReviews);
 catalogRouter.post(
@@ -171,6 +202,12 @@ catalogRouter.post(
 catalogRouter.get("/products/:slug", getProductBySlug);
 catalogRouter.get("/categories/:slug", getCategoryBySlug);
 catalogRouter.get("/collections/:slug", getCollectionBySlug);
+catalogRouter.get(
+  "/admin/lookups",
+  requireAuth,
+  requirePermission({ module: "catalog", action: "manage" }),
+  listAdminLookups,
+);
 catalogRouter.get(
   "/admin/products",
   requireAuth,
@@ -217,6 +254,122 @@ async function listPublicProducts(req: Request, res: Response, next: NextFunctio
   return listProductsWithVisibility(req, res, next, { publicOnly: true });
 }
 
+async function getCatalogHome(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const [products, categories, collections] = await Promise.all([
+      Product.find({ active: true, status: { $ne: "deleted" } })
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .select("name slug media variants computedBadges")
+        .lean(),
+      Category.find({ active: true, status: { $ne: "deleted" } })
+        .sort({ name: 1 })
+        .limit(8)
+        .select("name slug description banner")
+        .lean(),
+      Collection.find({ active: true, status: { $ne: "deleted" } })
+        .sort({ createdAt: -1 })
+        .limit(8)
+        .select("name slug description banner")
+        .lean(),
+    ]);
+
+    res.json({ products, categories, collections });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getCatalogFilters(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const products = await Product.find({ active: true, status: { $ne: "deleted" } })
+      .select("categoryIds collectionIds tagIds variants fabricDetails")
+      .lean();
+
+    const categoryCounts = new Map<string, number>();
+    const collectionCounts = new Map<string, number>();
+    const tagCounts = new Map<string, number>();
+    const sizes = new Set<string>();
+    const colors = new Set<string>();
+    const fabrics = new Set<string>();
+    let minPrice = Number.POSITIVE_INFINITY;
+    let maxPrice = 0;
+
+    for (const product of products) {
+      incrementIds(categoryCounts, product.categoryIds);
+      incrementIds(collectionCounts, product.collectionIds);
+      incrementIds(tagCounts, product.tagIds);
+
+      if (typeof product.fabricDetails === "string" && product.fabricDetails.trim().length > 0) {
+        for (const item of product.fabricDetails.split(/[,/]/)) {
+          const fabric = item.trim();
+
+          if (fabric.length > 0) {
+            fabrics.add(fabric);
+          }
+        }
+      }
+
+      for (const variant of product.variants ?? []) {
+        if (typeof variant.size === "string" && variant.size.length > 0) {
+          sizes.add(variant.size);
+        }
+        if (typeof variant.color === "string" && variant.color.length > 0) {
+          colors.add(variant.color);
+        }
+
+        const price = variant.salePrice ?? variant.basePrice;
+        if (typeof price === "number") {
+          minPrice = Math.min(minPrice, price);
+          maxPrice = Math.max(maxPrice, price);
+        }
+      }
+    }
+
+    const [categories, collections, tags] = await Promise.all([
+      Category.find({ _id: { $in: [...categoryCounts.keys()] }, active: true })
+        .select("name slug")
+        .lean(),
+      Collection.find({ _id: { $in: [...collectionCounts.keys()] }, active: true })
+        .select("name slug")
+        .lean(),
+      Tag.find({ _id: { $in: [...tagCounts.keys()] }, active: true })
+        .select("name slug")
+        .lean(),
+    ]);
+
+    res.json({
+      categories: categories.map((item) => ({
+        _id: String(item._id),
+        count: categoryCounts.get(String(item._id)) ?? 0,
+        name: item.name,
+        slug: item.slug,
+      })),
+      collections: collections.map((item) => ({
+        _id: String(item._id),
+        count: collectionCounts.get(String(item._id)) ?? 0,
+        name: item.name,
+        slug: item.slug,
+      })),
+      colors: [...colors].sort(),
+      fabrics: [...fabrics].sort(),
+      price: {
+        max: maxPrice,
+        min: Number.isFinite(minPrice) ? minPrice : 0,
+      },
+      sizes: [...sizes].sort(sortSizes),
+      tags: tags.map((item) => ({
+        _id: String(item._id),
+        count: tagCounts.get(String(item._id)) ?? 0,
+        name: item.name,
+        slug: item.slug,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function listProductsWithVisibility(
   req: Request,
   res: Response,
@@ -241,6 +394,7 @@ async function listProductsWithVisibility(
           size: { field: "variants.size", operators: ["eq"] },
           color: { field: "variants.color", operators: ["eq"] },
           fabric: { field: "fabricDetails", operators: ["regex"] },
+          preOrder: { field: "variants.preOrder.enabled", operators: ["eq"] },
           price: { field: "variants.basePrice", operators: ["gte", "lte"] },
         },
         sorts: {
@@ -431,17 +585,8 @@ async function createProduct(req: Request, res: Response, next: NextFunction) {
   try {
     const slug = createSlug(req.body.slug ?? req.body.name);
     const variants = req.body.variants.map(
-      (variant: z.infer<typeof variantInputSchema>, index: number) => ({
-        ...variant,
-        sku:
-          variant.sku ??
-          generateSku({
-            productSlug: slug,
-            color: variant.color,
-            size: variant.size,
-            sequence: index + 1,
-          }),
-      }),
+      (variant: z.infer<typeof variantInputSchema>, index: number) =>
+        normalizeVariantIdentity(variant, slug, index),
     );
     const product = await Product.create({ ...req.body, slug, variants });
     product.computedBadges = computeBadges(product);
@@ -468,17 +613,8 @@ async function updateProduct(req: Request, res: Response, next: NextFunction) {
       const productSlug = update.slug ?? existingProduct?.slug ?? "product";
 
       update.variants = update.variants.map(
-        (variant: z.infer<typeof variantInputSchema>, index: number) => ({
-          ...variant,
-          sku:
-            variant.sku ??
-            generateSku({
-              productSlug,
-              color: variant.color,
-              size: variant.size,
-              sequence: index + 1,
-            }),
-        }),
+        (variant: z.infer<typeof variantInputSchema>, index: number) =>
+          normalizeVariantIdentity(variant, productSlug, index),
       );
     }
 
@@ -495,6 +631,70 @@ async function updateProduct(req: Request, res: Response, next: NextFunction) {
   } catch (error) {
     next(error);
   }
+}
+
+async function listAdminLookups(_req: Request, res: Response, next: NextFunction) {
+  try {
+    const [brands, categories, collections, tags, warehouses] = await Promise.all([
+      Brand.find({ status: { $ne: "deleted" }, active: true })
+        .sort({ name: 1 })
+        .limit(100)
+        .lean(),
+      Category.find({ status: { $ne: "deleted" } })
+        .sort({ name: 1 })
+        .limit(200)
+        .lean(),
+      Collection.find({ status: { $ne: "deleted" } })
+        .sort({ name: 1 })
+        .limit(200)
+        .lean(),
+      Tag.find({ status: { $ne: "deleted" } })
+        .sort({ name: 1 })
+        .limit(200)
+        .lean(),
+      Warehouse.find({ status: { $ne: "deleted" }, active: true })
+        .sort({ name: 1 })
+        .limit(100)
+        .lean(),
+    ]);
+
+    res.json({ brands, categories, collections, tags, warehouses });
+  } catch (error) {
+    next(error);
+  }
+}
+
+function normalizePreOrder(preOrder?: z.infer<typeof preOrderInputSchema>) {
+  if (!preOrder?.enabled) {
+    return { enabled: false, quantityCap: 0, remainingQuantity: 0 };
+  }
+
+  return {
+    ...preOrder,
+    remainingQuantity: preOrder.remainingQuantity ?? preOrder.quantityCap,
+  };
+}
+
+function normalizeVariantIdentity(
+  variant: z.infer<typeof variantInputSchema>,
+  productSlug: string,
+  index: number,
+) {
+  const sku =
+    variant.sku ??
+    generateSku({
+      color: variant.color,
+      productSlug,
+      sequence: index + 1,
+      size: variant.size,
+    });
+
+  return {
+    ...variant,
+    barcode: variant.barcode ?? generateBarcode(sku),
+    preOrder: normalizePreOrder(variant.preOrder),
+    sku,
+  };
 }
 
 async function deleteProduct(req: Request, res: Response, next: NextFunction) {
@@ -651,6 +851,7 @@ function normalizeProductFilters(query: Record<string, unknown>): Record<string,
     "search",
     "size",
     "color",
+    "preOrder",
   ]);
 
   if (typeof query.fabric === "string" && query.fabric.length > 0) {
@@ -687,4 +888,30 @@ function pickStringFilters(
   }
 
   return filter;
+}
+
+function incrementIds(counter: Map<string, number>, ids: unknown) {
+  if (!Array.isArray(ids)) {
+    return;
+  }
+
+  for (const id of ids) {
+    const key = String(id);
+    counter.set(key, (counter.get(key) ?? 0) + 1);
+  }
+}
+
+function sortSizes(left: string, right: string) {
+  const order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+  const leftIndex = order.indexOf(left.toUpperCase());
+  const rightIndex = order.indexOf(right.toUpperCase());
+
+  if (leftIndex >= 0 || rightIndex >= 0) {
+    return (
+      (leftIndex >= 0 ? leftIndex : Number.MAX_SAFE_INTEGER) -
+      (rightIndex >= 0 ? rightIndex : Number.MAX_SAFE_INTEGER)
+    );
+  }
+
+  return left.localeCompare(right);
 }

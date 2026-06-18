@@ -35,6 +35,20 @@ export function MediaPicker({
               aspectRatio={item.selectedAspectRatio.replace(":", " / ")}
               src={item.secureUrl}
             />
+          ) : item.resourceType === "video" ? (
+            <div className="relative aspect-square overflow-hidden bg-black">
+              <video
+                aria-label={item.altText ?? "Video asset"}
+                className="size-full object-cover"
+                muted
+                playsInline
+                preload="metadata"
+                src={item.secureUrl}
+              />
+              <span className="absolute bottom-2 left-2 rounded-sm bg-black/70 px-2 py-1 text-[10px] font-semibold uppercase text-white">
+                Video
+              </span>
+            </div>
           ) : (
             <div className="flex aspect-square items-center justify-center bg-muted text-muted-foreground">
               <ImageIcon aria-hidden="true" />

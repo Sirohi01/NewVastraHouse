@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PublicPageFrame } from "@/components/layout/PublicPageFrame";
 
 export default function RegisterPage() {
   const [message, setMessage] = useState("");
@@ -23,38 +24,47 @@ export default function RegisterPage() {
   }
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-144px)] max-w-md items-center px-5 py-10">
-      <form action={submit} className="w-full rounded-lg border border-border bg-card p-6">
-        <h1 className="text-2xl font-semibold">Register</h1>
-        <input
-          className="mt-6 h-11 w-full rounded-md border border-border px-3"
-          name="firstName"
-          placeholder="First name"
-        />
-        <input
-          className="mt-4 h-11 w-full rounded-md border border-border px-3"
-          name="lastName"
-          placeholder="Last name"
-        />
-        <input
-          className="mt-4 h-11 w-full rounded-md border border-border px-3"
-          name="email"
-          placeholder="Email"
-          required
-          type="email"
-        />
-        <input
-          className="mt-4 h-11 w-full rounded-md border border-border px-3"
-          name="password"
-          placeholder="Password"
-          required
-          type="password"
-        />
-        <button className="mt-6 h-11 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground">
-          Create Account
-        </button>
-        {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
-      </form>
-    </section>
+    <PublicPageFrame
+      eyebrow="Account"
+      title="Create Account"
+      description="Create your customer account for faster checkout and order tracking."
+    >
+      <section className="mx-auto max-w-md">
+        <form
+          action={submit}
+          className="w-full rounded-md border border-[#e5dac7] bg-[#fffaf1] p-6"
+        >
+          <h2 className="font-serif text-2xl uppercase text-[#3d1620]">Register</h2>
+          <input
+            className="mt-6 h-11 w-full rounded-md border border-border px-3"
+            name="firstName"
+            placeholder="First name"
+          />
+          <input
+            className="mt-4 h-11 w-full rounded-md border border-border px-3"
+            name="lastName"
+            placeholder="Last name"
+          />
+          <input
+            className="mt-4 h-11 w-full rounded-md border border-border px-3"
+            name="email"
+            placeholder="Email"
+            required
+            type="email"
+          />
+          <input
+            className="mt-4 h-11 w-full rounded-md border border-border px-3"
+            name="password"
+            placeholder="Password"
+            required
+            type="password"
+          />
+          <button className="mt-6 h-11 w-full rounded-md bg-primary px-4 font-semibold text-primary-foreground transition-opacity hover:opacity-90">
+            Create Account
+          </button>
+          {message ? <p className="mt-4 text-sm text-muted-foreground">{message}</p> : null}
+        </form>
+      </section>
+    </PublicPageFrame>
   );
 }

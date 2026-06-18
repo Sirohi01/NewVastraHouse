@@ -24,6 +24,10 @@ const envSchema = z.object({
     .positive()
     .default(15 * 60),
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  ADMIN_TOTP_REQUIRED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   TOTP_ISSUER: z.string().min(1).default("The Vastra House"),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
@@ -45,6 +49,24 @@ const envSchema = z.object({
     .transform((value) => value === "true"),
   COD_MANUAL_REVIEW_THRESHOLD: z.coerce.number().nonnegative().default(10000),
   UPI_PAYMENT_ADDRESS: z.string().min(3).default("payments@vastrahouse"),
+  UPI_QR_IMAGE_URL: z.string().default(""),
+  BANK_ACCOUNT_NAME: z.string().default("The Vastra House"),
+  BANK_ACCOUNT_NUMBER: z.string().default(""),
+  BANK_IFSC: z.string().default(""),
+  BANK_NAME: z.string().default(""),
+  MANUAL_PAYMENT_INSTRUCTIONS: z
+    .string()
+    .default("Complete the transfer, then upload the payment proof during checkout."),
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  SMTP_FROM_EMAIL: z.string().default(""),
+  SMTP_FROM_NAME: z.string().default("The Vastra House"),
   SHIPPING_STANDARD_FEE: z.coerce.number().nonnegative().default(99),
   SHIPPING_EXPRESS_FEE: z.coerce.number().nonnegative().default(199),
   SHIPPING_FREE_THRESHOLD: z.coerce.number().nonnegative().default(2999),

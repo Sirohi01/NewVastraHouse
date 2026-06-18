@@ -55,13 +55,16 @@ export function WishlistClient() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {wishlist.items.map((item) => (
-        <article className="rounded-lg border border-border bg-card p-3 shadow-soft" key={item._id}>
-          <Link href={`/shop/${item.slug}`}>
+        <article
+          className="group rounded-lg border border-border bg-card p-3 shadow-soft transition-shadow duration-200 hover:shadow-lifted"
+          key={item._id}
+        >
+          <Link className="block overflow-hidden rounded-md" href={`/shop/${item.slug}`}>
             {item.media?.url ? (
               <ResponsiveImage
                 alt={item.productName}
                 aspectRatio={item.media.aspectRatio ?? "4/5"}
-                className="rounded-md"
+                className="rounded-md transition-transform duration-300 group-hover:scale-105"
                 src={item.media.url}
               />
             ) : (
@@ -85,7 +88,7 @@ export function WishlistClient() {
               <span className="text-muted-foreground">was {formatMoney(item.priceSnapshot)}</span>
             </p>
             <button
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive"
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground"
               onClick={() => removeItem(item._id)}
               type="button"
             >

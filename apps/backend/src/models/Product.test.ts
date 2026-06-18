@@ -14,6 +14,7 @@ function buildProduct(overrides: Record<string, unknown> = {}) {
     media: [
       {
         url: "https://res.cloudinary.com/demo/image/upload/red-kurti.jpg",
+        altText: "Red silk kurti on model",
         type: "image",
         aspectRatio: "4:5",
         objectFit: "cover",

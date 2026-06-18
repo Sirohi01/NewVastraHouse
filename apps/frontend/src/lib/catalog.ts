@@ -1,6 +1,7 @@
 import { apiBaseUrl } from "@/lib/api";
 
 export type MediaReference = {
+  mediaId?: string;
   url: string;
   altText?: string;
   type: "image" | "video" | "pdf" | "lookbook";
@@ -15,10 +16,22 @@ export type ProductVariant = {
   sku?: string;
   basePrice: number;
   salePrice?: number;
+  costPrice?: number;
   currencyCode?: string;
   stockPlaceholder?: number;
   active?: boolean;
   media?: MediaReference[];
+  preOrder?: {
+    advancePercent?: number;
+    enabled?: boolean;
+    endAt?: string;
+    expectedDeliveryAt?: string;
+    expectedDispatchAt?: string;
+    paymentMode?: "full" | "advance";
+    quantityCap?: number;
+    remainingQuantity?: number;
+    startAt?: string;
+  };
 };
 
 export type TaxonomyRef = {
@@ -38,6 +51,7 @@ export type CatalogProduct = {
   fabricDetails?: string;
   washCare?: string;
   sizeGuide?: string;
+  sizeGuideMedia?: MediaReference;
   media?: MediaReference[];
   variants: ProductVariant[];
   categoryIds?: TaxonomyRef[];
@@ -45,6 +59,34 @@ export type CatalogProduct = {
   tagIds?: TaxonomyRef[];
   computedBadges?: Record<string, boolean>;
   seo?: { title?: string; description?: string };
+};
+
+export type CatalogTile = {
+  _id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  banner?: MediaReference;
+};
+
+export type CatalogFilterOption = {
+  _id: string;
+  count: number;
+  name: string;
+  slug: string;
+};
+
+export type CatalogFilters = {
+  categories: CatalogFilterOption[];
+  collections: CatalogFilterOption[];
+  colors: string[];
+  fabrics: string[];
+  price: {
+    max: number;
+    min: number;
+  };
+  sizes: string[];
+  tags: CatalogFilterOption[];
 };
 
 export type ProductReview = {
@@ -94,12 +136,10 @@ export type CatalogQuery = {
   categoryId?: string;
   sort?: string;
   view?: string;
+  preOrder?: string;
 };
 
-export const filterOptions = {
-  sizes: ["XS", "S", "M", "L", "XL", "XXL"],
-  colors: ["Ivory", "Black", "Wine", "Emerald", "Navy", "Gold"],
-  fabrics: ["Cotton", "Silk", "Chiffon", "Georgette", "Linen", "Velvet"],
+export const sortOptions = {
   sorts: [
     { label: "Newest", value: "-newest" },
     { label: "Price: Low to High", value: "price" },
@@ -111,6 +151,18 @@ export const filterOptions = {
 
 export async function getProducts(query: CatalogQuery = {}) {
   return catalogFetch<PaginatedResult<CatalogProduct>>(`/catalog/products${toQueryString(query)}`);
+}
+
+export async function getCatalogFilters() {
+  return catalogFetch<CatalogFilters>("/catalog/filters");
+}
+
+export async function getCatalogHome() {
+  return catalogFetch<{
+    categories: CatalogTile[];
+    collections: CatalogTile[];
+    products: CatalogProduct[];
+  }>("/catalog/home");
 }
 
 export async function getProduct(slug: string) {
@@ -158,6 +210,29 @@ export function getProductPrice(product: CatalogProduct) {
   const price = variant?.salePrice ?? variant?.basePrice ?? 0;
   const currency = variant?.currencyCode ?? "INR";
 
+  return formatMoney(price, currency);
+}
+
+export function getProductPricing(product: CatalogProduct) {
+  const variant = product.variants[0];
+  const basePrice = variant?.basePrice ?? 0;
+  const salePrice = variant?.salePrice;
+  const currency = variant?.currencyCode ?? "INR";
+  const hasSale = typeof salePrice === "number" && salePrice > 0 && salePrice < basePrice;
+  const discountPercent = hasSale ? Math.round(((basePrice - salePrice) / basePrice) * 100) : 0;
+
+  return {
+    basePrice,
+    currency,
+    discountPercent,
+    hasSale,
+    original: formatMoney(basePrice, currency),
+    price: formatMoney(hasSale ? salePrice : basePrice, currency),
+    salePrice: salePrice ?? basePrice,
+  };
+}
+
+function formatMoney(price: number, currency: string) {
   return new Intl.NumberFormat("en-IN", {
     currency,
     maximumFractionDigits: 0,

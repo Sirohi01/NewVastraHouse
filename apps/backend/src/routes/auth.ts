@@ -18,6 +18,7 @@ import { mergeGuestCartIntoUserCart } from "../services/cartService.js";
 import { hashPassword, verifyPassword } from "../services/passwordService.js";
 import { issueRefreshToken, rotateRefreshToken } from "../services/refreshTokenService.js";
 import { createTotpSecret, verifyTotp } from "../services/totpService.js";
+import { env } from "../config/env.js";
 import { AppError } from "../middleware/errorHandler.js";
 
 const passwordSchema = z.string().min(8).max(128);
@@ -143,7 +144,7 @@ authRouter.post(
         throw new AppError("Invalid email or password", 401);
       }
 
-      if (user.type === "admin") {
+      if (user.type === "admin" && env.ADMIN_TOTP_REQUIRED) {
         if (!user.totpEnabled || !user.totpSecret) {
           const setup = createTotpSecret(user.email);
           user.totpSecret = setup.secret;
@@ -151,6 +152,7 @@ authRouter.post(
           res.status(403).json({
             error: "ADMIN_2FA_SETUP_REQUIRED",
             otpauthUrl: setup.otpauthUrl,
+            totpSecret: setup.secret,
           });
           return;
         }
@@ -234,6 +236,7 @@ authRouter.post(
         res.status(409).json({
           error: "ADMIN_2FA_SETUP_REQUIRED",
           otpauthUrl: setup.otpauthUrl,
+          totpSecret: setup.secret,
         });
         return;
       }

@@ -6,6 +6,9 @@ import { GiftCard } from "../models/GiftCard.js";
 import { Product } from "../models/Product.js";
 import { Wishlist } from "../models/Wishlist.js";
 import { AppError } from "../middleware/errorHandler.js";
+import { getAvailableStockBySku } from "./inventoryService.js";
+import { isPreOrderActive, type PreOrderVariantSnapshot } from "./preOrderService.js";
+import { getRuntimeNumberSetting } from "./runtimeSettingsService.js";
 
 export type CommerceIdentity = {
   userId?: string;
@@ -27,7 +30,10 @@ type ProductVariantSnapshot = {
   media?: unknown;
   unitPrice: number;
   currencyCode: string;
+  hsnCode: string;
+  gstRate: number;
   stock: number;
+  preOrder?: PreOrderVariantSnapshot;
 };
 
 type CartLine = {
@@ -40,8 +46,11 @@ type CartLine = {
   media?: unknown;
   unitPrice: number;
   currencyCode: string;
+  hsnCode?: string;
+  gstRate?: number;
   quantity: number;
   stockSnapshot: number;
+  preOrder?: PreOrderVariantSnapshot;
   priceSnapshotAt?: Date;
   deleteOne: () => void;
 };
@@ -61,6 +70,8 @@ type WishlistLine = {
 };
 
 type ProductLean = {
+  hsnCode: string;
+  gstRate: number;
   name: string;
   slug: string;
   media?: unknown[];
@@ -72,6 +83,7 @@ type ProductLean = {
     salePrice?: number;
     currencyCode?: string;
     stockPlaceholder?: number;
+    preOrder?: PreOrderVariantSnapshot;
     media?: unknown[];
   }>;
 };
@@ -125,7 +137,10 @@ export async function addCartItem(identity: CommerceIdentity, input: AddCartItem
     }
     existingLine.quantity = nextQuantity;
     existingLine.unitPrice = snapshot.unitPrice;
+    existingLine.hsnCode = snapshot.hsnCode;
+    existingLine.gstRate = snapshot.gstRate;
     existingLine.stockSnapshot = snapshot.stock;
+    existingLine.preOrder = snapshot.preOrder;
   } else {
     cart.items.push({
       productId: snapshot.productId,
@@ -136,8 +151,11 @@ export async function addCartItem(identity: CommerceIdentity, input: AddCartItem
       media: snapshot.media,
       unitPrice: snapshot.unitPrice,
       currencyCode: snapshot.currencyCode,
+      hsnCode: snapshot.hsnCode,
+      gstRate: snapshot.gstRate,
       quantity: input.quantity,
       stockSnapshot: snapshot.stock,
+      preOrder: snapshot.preOrder,
       priceSnapshotAt: new Date(),
     });
   }
@@ -165,7 +183,10 @@ export async function updateCartItemQuantity(
 
   line.quantity = quantity;
   line.unitPrice = snapshot.unitPrice;
+  line.hsnCode = snapshot.hsnCode;
+  line.gstRate = snapshot.gstRate;
   line.stockSnapshot = snapshot.stock;
+  line.preOrder = snapshot.preOrder;
 
   return saveCartActivity(cart);
 }
@@ -184,9 +205,10 @@ export async function removeCartItem(identity: CommerceIdentity, lineItemId: str
 
 export async function setGiftPackaging(identity: CommerceIdentity, enabled: boolean) {
   const cart = await getOrCreateCart(identity);
+  const fee = await getRuntimeNumberSetting("CART_GIFT_PACKAGING_FEE", env.CART_GIFT_PACKAGING_FEE);
   cart.giftPackaging = {
     enabled,
-    fee: enabled ? env.CART_GIFT_PACKAGING_FEE : 0,
+    fee: enabled ? fee : 0,
   };
 
   return saveCartActivity(cart);
@@ -237,7 +259,10 @@ export async function mergeGuestCartIntoUserCart(guestSessionId: string, userId:
     if (existing) {
       existing.quantity = Math.min(snapshot.stock, existing.quantity + guestLine.quantity);
       existing.unitPrice = snapshot.unitPrice;
+      existing.hsnCode = snapshot.hsnCode;
+      existing.gstRate = snapshot.gstRate;
       existing.stockSnapshot = snapshot.stock;
+      existing.preOrder = snapshot.preOrder;
     } else if (snapshot.stock > 0) {
       userCart.items.push({
         productId: snapshot.productId,
@@ -248,8 +273,11 @@ export async function mergeGuestCartIntoUserCart(guestSessionId: string, userId:
         media: snapshot.media,
         unitPrice: snapshot.unitPrice,
         currencyCode: snapshot.currencyCode,
+        hsnCode: snapshot.hsnCode,
+        gstRate: snapshot.gstRate,
         quantity: Math.min(snapshot.stock, guestLine.quantity),
         stockSnapshot: snapshot.stock,
+        preOrder: snapshot.preOrder,
         priceSnapshotAt: new Date(),
       });
     }
@@ -418,6 +446,21 @@ async function calculateCartTotals(cart: Awaited<ReturnType<typeof getOrCreateCa
     (total: number, item: CartLine) => total + item.unitPrice * item.quantity,
     0,
   );
+  const taxBreakdown = new Map<number, { taxableAmount: number; gstAmount: number }>();
+
+  for (const line of lines) {
+    const gstRate = line.gstRate ?? 0;
+    const lineSubtotal = roundMoney(line.unitPrice * line.quantity);
+    const taxableAmount = roundMoney(lineSubtotal / (1 + gstRate / 100));
+    const gstAmount = roundMoney(lineSubtotal - taxableAmount);
+    const current = taxBreakdown.get(gstRate) ?? { gstAmount: 0, taxableAmount: 0 };
+
+    taxBreakdown.set(gstRate, {
+      gstAmount: roundMoney(current.gstAmount + gstAmount),
+      taxableAmount: roundMoney(current.taxableAmount + taxableAmount),
+    });
+  }
+
   const giftPackagingFee = cart.giftPackaging?.enabled ? (cart.giftPackaging.fee ?? 0) : 0;
   const availableTotal = subtotal + giftPackagingFee;
   const giftCardDiscount = Math.min(
@@ -433,6 +476,16 @@ async function calculateCartTotals(cart: Awaited<ReturnType<typeof getOrCreateCa
     giftPackagingFee,
     giftCardDiscount,
     grandTotal: Math.max(0, availableTotal - giftCardDiscount),
+    gstAmount: roundMoney(
+      [...taxBreakdown.values()].reduce((total, item) => total + item.gstAmount, 0),
+    ),
+    taxableAmount: roundMoney(
+      [...taxBreakdown.values()].reduce((total, item) => total + item.taxableAmount, 0),
+    ),
+    taxBreakdown: [...taxBreakdown.entries()].map(([gstRate, value]) => ({
+      gstRate,
+      ...value,
+    })),
     currencyCode: lines[0]?.currencyCode ?? "INR",
   };
 }
@@ -459,6 +512,9 @@ async function getProductVariantSnapshot(
     throw new AppError("Product variant not found", 404);
   }
 
+  const inventoryAvailable = await getAvailableStockBySku(variant.sku);
+  const preOrderActive = isPreOrderActive(variant.preOrder);
+
   return {
     productId: new Types.ObjectId(productId),
     variantId: new Types.ObjectId(variantId),
@@ -466,9 +522,14 @@ async function getProductVariantSnapshot(
     slug: product.slug,
     sku: variant.sku,
     media: (variant.media?.[0] ?? product.media?.[0]) as unknown,
+    preOrder: preOrderActive ? variant.preOrder : undefined,
     unitPrice: variant.salePrice ?? variant.basePrice,
+    hsnCode: product.hsnCode,
+    gstRate: product.gstRate,
     currencyCode: variant.currencyCode ?? "INR",
-    stock: variant.stockPlaceholder ?? 0,
+    stock: preOrderActive
+      ? (variant.preOrder?.remainingQuantity ?? 0)
+      : (inventoryAvailable ?? variant.stockPlaceholder ?? 0),
   };
 }
 
@@ -486,4 +547,8 @@ function findCartLine(cart: { items: unknown }, lineItemId: string) {
 
 function findWishlistLine(wishlist: { items: unknown }, lineItemId: string) {
   return wishlistLines(wishlist).find((line) => String(line._id) === lineItemId);
+}
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
 }

@@ -22,6 +22,33 @@ const priceTierSchema = new Schema(
   { _id: false },
 );
 
+export const productionStages = [
+  "order_received",
+  "fabric_sourcing",
+  "cutting",
+  "printing",
+  "stitching",
+  "finishing",
+  "quality_check",
+  "packaging",
+  "dispatch",
+] as const;
+
+const preOrderSchema = new Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    startAt: { type: Date },
+    endAt: { type: Date },
+    expectedDispatchAt: { type: Date },
+    expectedDeliveryAt: { type: Date },
+    paymentMode: { type: String, enum: ["full", "advance"], default: "full" },
+    advancePercent: { type: Number, min: 1, max: 99, default: 50 },
+    quantityCap: { type: Number, min: 0, default: 0 },
+    remainingQuantity: { type: Number, min: 0, default: 0 },
+  },
+  { _id: false },
+);
+
 const variantSchema = new Schema(
   {
     color: { type: String, trim: true },
@@ -30,9 +57,11 @@ const variantSchema = new Schema(
     barcode: { type: String, trim: true },
     basePrice: { type: Number, required: true, min: 0 },
     salePrice: { type: Number, min: 0 },
+    costPrice: { type: Number, min: 0, default: 0 },
     currencyCode: { type: String, required: true, uppercase: true, trim: true, default: "INR" },
     priceTiers: [priceTierSchema],
     stockPlaceholder: { type: Number, min: 0, default: 0 },
+    preOrder: { type: preOrderSchema, default: () => ({}) },
     media: [mediaReferenceSchema],
     active: { type: Boolean, default: true },
   },
@@ -80,6 +109,7 @@ const productSchema = new Schema(
     fabricDetails: { type: String, trim: true },
     washCare: { type: String, trim: true },
     sizeGuide: { type: String, trim: true },
+    sizeGuideMedia: mediaReferenceSchema,
     hsnCode: {
       type: String,
       required: true,
@@ -128,6 +158,7 @@ productSchema.index({ tagIds: 1, active: 1, status: 1 });
 productSchema.index({ "variants.size": 1, active: 1, status: 1 });
 productSchema.index({ "variants.color": 1, active: 1, status: 1 });
 productSchema.index({ "variants.basePrice": 1, active: 1, status: 1 });
+productSchema.index({ "variants.preOrder.enabled": 1, "variants.preOrder.endAt": 1 });
 productSchema.index({ fabricDetails: 1, active: 1, status: 1 });
 productSchema.index({ "merchandisingMetrics.unitsSold30d": -1, active: 1, status: 1 });
 

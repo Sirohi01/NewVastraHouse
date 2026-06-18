@@ -43,3 +43,10 @@ This `docs/` folder is the single source of truth for product, architecture, and
 - During sprint planning, pull tasks directly from [08-atomic-tasks.md](08-atomic-tasks.md) — tasks are already atomic and ordered within their phase.
 - When scoping a new phase's sprint, cross-reference [07-project-phases.md](07-project-phases.md) (acceptance criteria) and [09-estimation-and-priority.md](09-estimation-and-priority.md) (priority/critical path) to decide what to pull forward.
 - Architecture decisions (multi-brand, multi-currency, international shipping, mobile app, wholesale) are seeded throughout as **extension points** — see [06-cross-cutting-requirements.md](06-cross-cutting-requirements.md) §Scalability and §Future Expansion before making any core design choice that could foreclose them.
+
+## Phase Sign-off Artifacts
+
+| # | Document | Contents |
+|---|----------|----------|
+| 13 | [13-order-lifecycle-transition-graph.md](13-order-lifecycle-transition-graph.md) | Phase 13 sign-off artifact for the approved order-status transition graph and actor rules |
+| 14 | [14-return-refund-policy.md](14-return-refund-policy.md) | Phase 14 sign-off artifact for return-window and refund-method policy rules |

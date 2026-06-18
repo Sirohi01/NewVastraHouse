@@ -15,7 +15,9 @@ export const paymentStatuses = [
 
 const paymentSessionSchema = new Schema(
   {
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
+    guestEmail: { type: String, lowercase: true, trim: true, index: true },
+    guestSessionId: { type: String, trim: true, index: true },
     orderReference: { type: String, required: true, trim: true, index: true },
     method: { type: String, enum: paymentMethods, required: true, index: true },
     status: {
