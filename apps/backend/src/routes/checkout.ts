@@ -5,13 +5,8 @@ import { attachOptionalUser } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { Order } from "../models/Order.js";
 import { PaymentSession } from "../models/PaymentSession.js";
-import {
-  createOrderFromCheckout,
-  previewCheckout,
-  sendOrderConfirmationEmail,
-} from "../services/checkoutService.js";
-import { verifyRazorpayPayment } from "../services/paymentService.js";
-import { createProductionTrackersForOrder } from "../services/preOrderService.js";
+import { createOrderFromCheckout, previewCheckout } from "../services/checkoutService.js";
+import { createBalancePaymentForOrder, verifyRazorpayPayment } from "../services/paymentService.js";
 import { getRuntimeBooleanSetting, getRuntimeSetting } from "../services/runtimeSettingsService.js";
 
 export const checkoutRouter = Router();
@@ -128,25 +123,27 @@ checkoutRouter.post(
       });
       const order = await Order.findOne({ paymentSessionId: session._id });
 
-      if (order && (session.status === "confirmed" || session.status === "partially_paid")) {
-        const hasPreOrderItems = order.items.some(
-          (item: { preOrder?: { enabled?: boolean } }) => item.preOrder?.enabled,
-        );
-        order.status = hasPreOrderItems ? "pre_order_confirmed" : "confirmed";
-        await order.save();
-
-        if (hasPreOrderItems) {
-          await createProductionTrackersForOrder(order);
-        }
-
-        await sendOrderConfirmationEmail(
-          { guestEmail: order.guestEmail, shippingAddress: order.shippingAddress },
-          order,
-          session.payableNow,
-        );
-      }
-
       res.json({ order, session });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+checkoutRouter.post(
+  "/orders/:orderNumber/balance/razorpay",
+  validateRequest({
+    body: z.object({ guestEmail: z.string().email().optional() }).strict(),
+    params: z.object({ orderNumber: z.string().min(3) }).strict(),
+  }),
+  async (req, res, next) => {
+    try {
+      const result = await createBalancePaymentForOrder({
+        guestEmail: req.body.guestEmail,
+        orderNumber: String(req.params.orderNumber),
+        userId: req.user?.id,
+      });
+      res.json(result);
     } catch (error) {
       next(error);
     }

@@ -15,6 +15,43 @@ export type AdminDashboardSummary = {
   returnsQueue: number;
 };
 
+export type AdminRevenueTrendPoint = {
+  date: string;
+  orders: number;
+  revenue: number;
+};
+
+export type AdminOrderStatusBreakdownItem = {
+  status: string;
+  count: number;
+};
+
+export type AdminPaymentMethodBreakdownItem = {
+  method: string;
+  count: number;
+  revenue: number;
+};
+
+export type AdminTopProduct = {
+  sku: string;
+  productName: string;
+  quantity: number;
+  revenue: number;
+};
+
+export type AdminDashboardCharts = {
+  averageOrderValue30d: number;
+  orderStatusBreakdown: AdminOrderStatusBreakdownItem[];
+  paymentMethodBreakdown: AdminPaymentMethodBreakdownItem[];
+  revenueTrend: AdminRevenueTrendPoint[];
+  topProducts: AdminTopProduct[];
+  totalOrders30d: number;
+  totalRevenue30d: number;
+};
+
 export function fetchAdminDashboard(accessToken?: string) {
-  return apiFetch<{ summary: AdminDashboardSummary }>("/admin/dashboard", { accessToken });
+  return apiFetch<{ charts: AdminDashboardCharts; summary: AdminDashboardSummary }>(
+    "/admin/dashboard",
+    { accessToken },
+  );
 }

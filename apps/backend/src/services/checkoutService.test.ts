@@ -142,6 +142,217 @@ test("pre-order checkout rejects closed booking windows", async (t) => {
   );
 });
 
+test("checkout rejects balance payment mode for a fresh (non pre-order) checkout", async (t) => {
+  const ctx = patchCheckoutModels();
+  t.after(ctx.restore);
+
+  await assert.rejects(
+    createOrderFromCheckout({
+      paymentMethod: "cod",
+      paymentMode: "balance",
+      shippingAddress: buildAddress(),
+      shippingMethod: "standard",
+      userId: ctx.userId,
+    }),
+    /Balance payment mode is only available/,
+  );
+});
+
+test("mixed cart with a pre-order item still reserves and deducts stock for the ready-stock item", async (t) => {
+  const userId = String(new Types.ObjectId());
+  const regularProductId = new Types.ObjectId();
+  const regularVariantId = new Types.ObjectId();
+  const preOrderProductId = new Types.ObjectId();
+  const preOrderVariantId = new Types.ObjectId();
+  const warehouseId = String(new Types.ObjectId());
+  const regularSku = "TVH-REGULAR-001";
+  const preOrderSku = "TVH-PREORDER-001";
+
+  const originalCartFindOne = Cart.findOne;
+  const originalProductFindOne = Product.findOne;
+  const originalProductFindOneAndUpdate = Product.findOneAndUpdate;
+  const originalOrderCreate = Order.create;
+  const originalPaymentCreate = PaymentSession.create;
+  const originalHistoryCreate = PaymentHistory.create;
+  const originalStockLedgerFind = StockLedger.find;
+  const originalStockLedgerFindOne = StockLedger.findOne;
+  const originalStockLedgerFindOneAndUpdate = StockLedger.findOneAndUpdate;
+  const originalInventoryLogCreate = InventoryLog.create;
+  const originalProductionTrackerCreate = ProductionTracker.create;
+
+  const regularLedger = {
+    available: 5,
+    damaged: 0,
+    incoming: 0,
+    lowStockThreshold: 0,
+    reserved: 0,
+    returned: 0,
+    sku: regularSku,
+    warehouseId,
+  };
+  const preOrder = {
+    advancePercent: 50,
+    enabled: true,
+    endAt: new Date(Date.now() + 60_000),
+    expectedDeliveryAt: new Date(Date.now() + 7 * 86_400_000),
+    expectedDispatchAt: new Date(Date.now() + 5 * 86_400_000),
+    paymentMode: "advance" as const,
+    quantityCap: 5,
+    remainingQuantity: 5,
+    startAt: new Date(Date.now() - 60_000),
+  };
+  const products: Record<
+    string,
+    { _id: Types.ObjectId; gstRate: number; hsnCode: string; variants: unknown[] }
+  > = {
+    [String(regularProductId)]: {
+      _id: regularProductId,
+      gstRate: 5,
+      hsnCode: "6204",
+      variants: [{ _id: regularVariantId, active: true, sku: regularSku, stockPlaceholder: 5 }],
+    },
+    [String(preOrderProductId)]: {
+      _id: preOrderProductId,
+      gstRate: 5,
+      hsnCode: "6204",
+      variants: [
+        { _id: preOrderVariantId, active: true, preOrder, sku: preOrderSku, stockPlaceholder: 0 },
+      ],
+    },
+  };
+  const inventoryLogs: Array<Record<string, unknown>> = [];
+  const productionTrackers: Array<Record<string, unknown>> = [];
+
+  function buildMixedCart() {
+    const cart = new Cart({
+      items: [
+        {
+          currencyCode: "INR",
+          productId: regularProductId,
+          productName: "Cotton Saree",
+          quantity: 1,
+          sku: regularSku,
+          slug: "cotton-saree",
+          stockSnapshot: 5,
+          unitPrice: 2000,
+          variantId: regularVariantId,
+        },
+        {
+          currencyCode: "INR",
+          preOrder,
+          productId: preOrderProductId,
+          productName: "Bridal Lehenga",
+          quantity: 1,
+          sku: preOrderSku,
+          slug: "bridal-lehenga",
+          stockSnapshot: 5,
+          unitPrice: 8000,
+          variantId: preOrderVariantId,
+        },
+      ],
+      userId,
+    });
+    cart.save = async () => cart;
+    return cart;
+  }
+
+  (Cart as unknown as { findOne: unknown }).findOne = () => Promise.resolve(buildMixedCart());
+  (Product as unknown as { findOne: unknown }).findOne = (filter: { _id: unknown }) =>
+    chain(products[String(filter._id)] ?? null);
+  (Product as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate = (
+    _filter: Record<string, unknown>,
+    update: { $inc?: Record<string, number> },
+  ) => {
+    preOrder.remainingQuantity += update.$inc?.["variants.$.preOrder.remainingQuantity"] ?? 0;
+    return Promise.resolve({ _id: preOrderProductId });
+  };
+  (StockLedger as unknown as { find: unknown }).find = (filter: { sku?: string }) =>
+    chain(filter.sku === regularSku ? [regularLedger] : []);
+  (StockLedger as unknown as { findOne: unknown }).findOne = (filter: LedgerFilter) => ({
+    lean() {
+      return Promise.resolve(
+        matchesLedgerFilter(regularLedger, filter) ? { ...regularLedger } : null,
+      );
+    },
+    sort() {
+      return Promise.resolve(matchesLedgerFilter(regularLedger, filter) ? regularLedger : null);
+    },
+  });
+  (StockLedger as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate = (
+    filter: LedgerFilter,
+    update: { $inc?: Partial<Record<"available" | "reserved", number>> },
+  ) => {
+    if (!matchesLedgerFilter(regularLedger, filter)) {
+      return Promise.resolve(null);
+    }
+    for (const [field, amount] of Object.entries(update.$inc ?? {})) {
+      (regularLedger as unknown as Record<string, number>)[field] += amount;
+    }
+    return Promise.resolve(regularLedger);
+  };
+  (Order as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    const order = new Order(payload);
+    order.save = async () => order;
+    return Promise.resolve(order);
+  };
+  (PaymentSession as unknown as { create: unknown }).create = (
+    payload: Record<string, unknown>,
+  ) => {
+    const session = new PaymentSession(payload);
+    session.save = async () => session;
+    return Promise.resolve(session);
+  };
+  (PaymentHistory as unknown as { create: unknown }).create = (payload: unknown) =>
+    Promise.resolve(payload);
+  (InventoryLog as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    inventoryLogs.push(payload);
+    return Promise.resolve(payload);
+  };
+  (ProductionTracker as unknown as { create: unknown }).create = (
+    payload: Record<string, unknown>,
+  ) => {
+    productionTrackers.push(payload);
+    return Promise.resolve(payload);
+  };
+
+  t.after(() => {
+    (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
+    (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
+    (Product as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate =
+      originalProductFindOneAndUpdate;
+    (Order as unknown as { create: unknown }).create = originalOrderCreate;
+    (PaymentSession as unknown as { create: unknown }).create = originalPaymentCreate;
+    (PaymentHistory as unknown as { create: unknown }).create = originalHistoryCreate;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
+    (StockLedger as unknown as { findOne: unknown }).findOne = originalStockLedgerFindOne;
+    (StockLedger as unknown as { findOneAndUpdate: unknown }).findOneAndUpdate =
+      originalStockLedgerFindOneAndUpdate;
+    (InventoryLog as unknown as { create: unknown }).create = originalInventoryLogCreate;
+    (ProductionTracker as unknown as { create: unknown }).create = originalProductionTrackerCreate;
+  });
+
+  const result = await createOrderFromCheckout({
+    paymentMethod: "cod",
+    paymentMode: "advance",
+    payableNow: 4000,
+    shippingAddress: buildAddress(),
+    shippingMethod: "standard",
+    userId,
+  });
+
+  assert.equal(result.order.status, "pre_order_confirmed");
+  assert.equal(result.order.stockReservations.length, 1);
+  assert.equal(result.order.stockReservations[0].sku, regularSku);
+  assert.equal(result.order.stockReservations[0].status, "deducted");
+  assert.equal(regularLedger.available, 4);
+  assert.equal(regularLedger.reserved, 0);
+  assert.equal(productionTrackers.length, 1);
+  assert.equal(
+    inventoryLogs.some((log) => log.eventType === "deduct"),
+    true,
+  );
+});
+
 test("checkout order API creates orders for all four payment methods", async (t) => {
   const ctx = patchCheckoutModels();
   t.after(ctx.restore);

@@ -3,10 +3,12 @@ import Razorpay from "razorpay";
 import { Types, type HydratedDocument } from "mongoose";
 import { env } from "../config/env.js";
 import { AppError } from "../middleware/errorHandler.js";
+import { Order } from "../models/Order.js";
 import { PaymentHistory } from "../models/PaymentHistory.js";
 import { PaymentSession } from "../models/PaymentSession.js";
 import { PaymentWebhookEvent } from "../models/PaymentWebhookEvent.js";
 import { writeAuditLog } from "./auditLogService.js";
+import { finalizeOrderAfterPayment } from "./orderFulfillmentService.js";
 import { getPaymentSettings } from "./paymentSettingsService.js";
 import { getRuntimeNumberSetting } from "./runtimeSettingsService.js";
 
@@ -106,6 +108,69 @@ export async function createRazorpayPayment(input: CreatePaymentInput) {
   return { gatewayOrder, session };
 }
 
+/**
+ * Creates a fresh Razorpay gateway order for the outstanding balance of an
+ * already-placed (typically pre-order advance) order, reusing the order's
+ * existing PaymentSession so paidAmount/outstandingAmount stay accurate.
+ * Confirmation goes through the same verifyRazorpayPayment/webhook path as
+ * the original payment.
+ */
+export async function createBalancePaymentForOrder(input: {
+  orderNumber: string;
+  userId?: string;
+  guestEmail?: string;
+}) {
+  const order = await Order.findOne({
+    orderNumber: input.orderNumber,
+    ...(input.userId ? { userId: input.userId } : {}),
+  });
+
+  if (!order) {
+    throw new AppError("Order not found", 404);
+  }
+
+  if (!input.userId) {
+    const normalizedEmail = input.guestEmail?.trim().toLowerCase();
+    if (!normalizedEmail || order.guestEmail !== normalizedEmail) {
+      throw new AppError("Order not found", 404);
+    }
+  }
+
+  if (!order.paymentSessionId) {
+    throw new AppError("Order has no associated payment session", 409);
+  }
+
+  const session = await PaymentSession.findById(order.paymentSessionId);
+
+  if (!session) {
+    throw new AppError("Payment session not found", 404);
+  }
+
+  if (session.method !== "razorpay") {
+    throw new AppError("Balance payment is only supported for Razorpay orders", 409);
+  }
+
+  if (session.outstandingAmount <= 0) {
+    throw new AppError("This order has no outstanding balance", 409);
+  }
+
+  const gatewayOrder = await createRazorpayGatewayOrder({
+    amount: session.outstandingAmount,
+    currencyCode: session.currencyCode,
+    receipt: `${order.orderNumber}-BAL`,
+  });
+
+  session.payableNow = session.outstandingAmount;
+  session.paymentMode = "balance";
+  session.razorpayOrderId = gatewayOrder.id;
+  await session.save();
+  await recordPaymentHistory(session, "razorpay_balance_order_created", "customer", {
+    gatewayOrder,
+  });
+
+  return { gatewayOrder, order, session };
+}
+
 export async function verifyRazorpayPayment(input: {
   razorpayOrderId: string;
   razorpayPaymentId: string;
@@ -132,6 +197,13 @@ export async function verifyRazorpayPayment(input: {
       gatewayTransactionId: input.razorpayPaymentId,
     },
   );
+  await finalizeOrderAfterPayment({
+    actor: { actorId: input.actorId, actorType: input.actorId ? "customer" : "system" },
+    outstandingAmount: session.outstandingAmount,
+    payableNow: session.payableNow,
+    paymentSessionId: session._id,
+    paymentSessionStatus: session.status,
+  });
 
   return session;
 }
@@ -189,6 +261,13 @@ export async function handleRazorpayWebhook(rawBody: Buffer, signature: string |
       await recordPaymentHistory(session, "razorpay_webhook_captured", "system", {
         gatewayTransactionId: payment.id,
         webhookEventId: eventId,
+      });
+      await finalizeOrderAfterPayment({
+        actor: { actorType: "system" },
+        outstandingAmount: session.outstandingAmount,
+        payableNow: session.payableNow,
+        paymentSessionId: session._id,
+        paymentSessionStatus: session.status,
       });
     }
   }
@@ -310,6 +389,13 @@ export async function approveManualPayment(input: {
     entity: { id: session._id, type: "payment-session", displayId: session.orderReference },
     action: "update",
     metadata: { transition: "approve_payment" },
+  });
+  await finalizeOrderAfterPayment({
+    actor: { actorId: input.adminUserId, actorType: "admin" },
+    outstandingAmount: session.outstandingAmount,
+    payableNow: session.payableNow,
+    paymentSessionId: session._id,
+    paymentSessionStatus: session.status,
   });
 
   return session;

@@ -4,11 +4,15 @@ import test from "node:test";
 import { Types } from "mongoose";
 import { env } from "../config/env.js";
 import { AuditLog } from "../models/AuditLog.js";
+import { Order } from "../models/Order.js";
+import { OrderTimeline } from "../models/OrderTimeline.js";
 import { PaymentHistory } from "../models/PaymentHistory.js";
 import { PaymentSession } from "../models/PaymentSession.js";
 import { PaymentWebhookEvent } from "../models/PaymentWebhookEvent.js";
+import { ProductionTracker } from "../models/ProductionTracker.js";
 import {
   approveManualPayment,
+  createBalancePaymentForOrder,
   createCodPayment,
   createManualPayment,
   createRazorpayPayment,
@@ -17,10 +21,12 @@ import {
   rejectManualPayment,
   verifyRazorpayPayment,
 } from "./paymentService.js";
+import { finalizeOrderAfterPayment } from "./orderFulfillmentService.js";
 
 test("Razorpay payment verification confirms partial capture and tracks outstanding balance", async (t) => {
   setRazorpaySecrets();
   const originals = patchHistoryOnly();
+  const orderCtx = patchOrderModels();
   let session: InstanceType<typeof PaymentSession> | undefined;
 
   const originalCreate = PaymentSession.create;
@@ -36,6 +42,7 @@ test("Razorpay payment verification confirms partial capture and tracks outstand
     (PaymentSession as unknown as { create: unknown }).create = originalCreate;
     (PaymentSession as unknown as { findOne: unknown }).findOne = originalFindOne;
     originals.restore();
+    orderCtx.restore();
   });
 
   const created = await createRazorpayPayment({
@@ -55,11 +62,14 @@ test("Razorpay payment verification confirms partial capture and tracks outstand
   assert.equal(confirmed.status, "partially_paid");
   assert.equal(confirmed.paidAmount, 1500);
   assert.equal(confirmed.outstandingAmount, 3500);
+  assert.equal(orderCtx.order.status, "confirmed");
+  assert.equal(orderCtx.timelineEvents.length, 1);
 });
 
 test("Razorpay webhook rejects invalid signatures and processes valid captures idempotently", async (t) => {
   setRazorpaySecrets();
   const history = patchHistoryOnly();
+  const orderCtx = patchOrderModels();
   const originalEventCreate = PaymentWebhookEvent.create;
   const originalEventFindOne = PaymentWebhookEvent.findOne;
   const originalSessionFindOne = PaymentSession.findOne;
@@ -94,6 +104,7 @@ test("Razorpay webhook rejects invalid signatures and processes valid captures i
     (PaymentWebhookEvent as unknown as { findOne: unknown }).findOne = originalEventFindOne;
     (PaymentSession as unknown as { findOne: unknown }).findOne = originalSessionFindOne;
     history.restore();
+    orderCtx.restore();
   });
 
   const payload = Buffer.from(
@@ -130,10 +141,13 @@ test("Razorpay webhook rejects invalid signatures and processes valid captures i
     events.some((event) => !event.signatureVerified),
     true,
   );
+  assert.equal(orderCtx.order.status, "confirmed");
+  assert.equal(orderCtx.timelineEvents.length, 1);
 });
 
 test("manual payment submission enters verification queue and admin approval audit-logs transition", async (t) => {
   const history = patchHistoryOnly();
+  const orderCtx = patchOrderModels();
   const originalSessionCreate = PaymentSession.create;
   const originalSessionFindById = PaymentSession.findById;
   const originalAuditCreate = AuditLog.create;
@@ -156,6 +170,7 @@ test("manual payment submission enters verification queue and admin approval aud
     (PaymentSession as unknown as { findById: unknown }).findById = originalSessionFindById;
     (AuditLog as unknown as { create: unknown }).create = originalAuditCreate;
     history.restore();
+    orderCtx.restore();
   });
 
   const submitted = await createManualPayment({
@@ -179,6 +194,8 @@ test("manual payment submission enters verification queue and admin approval aud
   assert.equal(auditLogs.length, 1);
   assert.equal(history.events.includes("manual_payment_submitted"), true);
   assert.equal(history.events.includes("payment_approved"), true);
+  assert.equal(orderCtx.order.status, "confirmed");
+  assert.equal(orderCtx.timelineEvents.length, 1);
 });
 
 test("COD and direct UPI flows create expected payment states", async (t) => {
@@ -249,6 +266,210 @@ test("manual payment rejection requires pending state and records reason", async
   assert.equal(history.events.includes("payment_rejected"), true);
 });
 
+test("finalizeOrderAfterPayment confirms a pre-order, creates a production tracker, and is idempotent", async (t) => {
+  const orderCtx = patchOrderModels({
+    items: [
+      {
+        preOrder: { enabled: true },
+        productId: new Types.ObjectId(),
+        productName: "Bridal Lehenga",
+        quantity: 1,
+        sku: "TVH-BRIDAL-001",
+        variantId: new Types.ObjectId(),
+      },
+    ],
+    paymentMode: "advance",
+  });
+  const originalTrackerCreate = ProductionTracker.create;
+  const trackers: unknown[] = [];
+  (ProductionTracker as unknown as { create: unknown }).create = (payload: unknown) => {
+    trackers.push(payload);
+    return Promise.resolve(payload);
+  };
+  t.after(() => {
+    (ProductionTracker as unknown as { create: unknown }).create = originalTrackerCreate;
+    orderCtx.restore();
+  });
+
+  const sessionId = new Types.ObjectId();
+  const captureInput = {
+    actor: { actorType: "system" as const },
+    outstandingAmount: 3500,
+    payableNow: 1500,
+    paymentSessionId: sessionId,
+    paymentSessionStatus: "partially_paid",
+  };
+
+  const first = await finalizeOrderAfterPayment(captureInput);
+  const second = await finalizeOrderAfterPayment(captureInput);
+
+  assert.equal(first?.status, "pre_order_confirmed");
+  assert.equal(second?.status, "pre_order_confirmed");
+  assert.equal(orderCtx.timelineEvents.length, 1);
+  assert.equal(trackers.length, 1);
+});
+
+test("finalizeOrderAfterPayment does not misfire a balance-received notification on a duplicate full-payment capture", async (t) => {
+  const orderCtx = patchOrderModels({ paymentMode: "full" });
+  t.after(orderCtx.restore);
+
+  const captureInput = {
+    actor: { actorType: "system" as const },
+    outstandingAmount: 0,
+    payableNow: 5000,
+    paymentSessionId: new Types.ObjectId(),
+    paymentSessionStatus: "confirmed",
+  };
+
+  const first = await finalizeOrderAfterPayment(captureInput);
+  const second = await finalizeOrderAfterPayment(captureInput);
+
+  assert.equal(first?.status, "confirmed");
+  assert.equal(second?.status, "confirmed");
+  assert.equal(orderCtx.order.balancePaymentNotifiedAt, undefined);
+  assert.equal(orderCtx.timelineEvents.length, 1);
+});
+
+test("finalizeOrderAfterPayment notifies once when an advance order's balance is fully paid", async (t) => {
+  const orderCtx = patchOrderModels({
+    paymentMode: "advance",
+    status: "pre_order_confirmed",
+  });
+  t.after(orderCtx.restore);
+
+  const captureInput = {
+    actor: { actorType: "system" as const },
+    outstandingAmount: 0,
+    payableNow: 3500,
+    paymentSessionId: new Types.ObjectId(),
+    paymentSessionStatus: "confirmed",
+  };
+
+  const first = await finalizeOrderAfterPayment(captureInput);
+  const second = await finalizeOrderAfterPayment(captureInput);
+
+  assert.equal(first?.status, "pre_order_confirmed");
+  assert.equal(second?.status, "pre_order_confirmed");
+  assert.ok(orderCtx.order.balancePaymentNotifiedAt instanceof Date);
+  assert.equal(orderCtx.timelineEvents.length, 0);
+});
+
+test("createBalancePaymentForOrder reuses the existing session to collect the outstanding amount", async (t) => {
+  const history = patchHistoryOnly();
+  const originalOrderFindOne = Order.findOne;
+  const originalSessionFindById = PaymentSession.findById;
+  const session = makeSession({
+    amount: 5000,
+    method: "razorpay",
+    orderReference: "ORDER-P10-BAL",
+    outstandingAmount: 3500,
+    paidAmount: 1500,
+    payableNow: 1500,
+    paymentMode: "advance",
+    status: "partially_paid",
+  });
+  const order = {
+    _id: new Types.ObjectId(),
+    guestEmail: "guest@example.com",
+    orderNumber: "ORDER-P10-BAL",
+    paymentSessionId: session._id,
+    userId: new Types.ObjectId(),
+  };
+
+  (Order as unknown as { findOne: unknown }).findOne = () => Promise.resolve(order);
+  (PaymentSession as unknown as { findById: unknown }).findById = () => Promise.resolve(session);
+  t.after(() => {
+    (Order as unknown as { findOne: unknown }).findOne = originalOrderFindOne;
+    (PaymentSession as unknown as { findById: unknown }).findById = originalSessionFindById;
+    history.restore();
+  });
+
+  const result = await createBalancePaymentForOrder({
+    orderNumber: "ORDER-P10-BAL",
+    userId: String(order.userId),
+  });
+
+  assert.equal(result.session.payableNow, 3500);
+  assert.equal(result.session.paymentMode, "balance");
+  assert.ok(result.gatewayOrder.id);
+  assert.equal(history.events.includes("razorpay_balance_order_created"), true);
+});
+
+test("createBalancePaymentForOrder rejects when the order has no outstanding balance", async (t) => {
+  const history = patchHistoryOnly();
+  const originalOrderFindOne = Order.findOne;
+  const originalSessionFindById = PaymentSession.findById;
+  const session = makeSession({
+    method: "razorpay",
+    outstandingAmount: 0,
+    paidAmount: 5000,
+    status: "confirmed",
+  });
+  const order = {
+    _id: new Types.ObjectId(),
+    orderNumber: "ORDER-P10-PAID",
+    paymentSessionId: session._id,
+    userId: new Types.ObjectId(),
+  };
+
+  (Order as unknown as { findOne: unknown }).findOne = () => Promise.resolve(order);
+  (PaymentSession as unknown as { findById: unknown }).findById = () => Promise.resolve(session);
+  t.after(() => {
+    (Order as unknown as { findOne: unknown }).findOne = originalOrderFindOne;
+    (PaymentSession as unknown as { findById: unknown }).findById = originalSessionFindById;
+    history.restore();
+  });
+
+  await assert.rejects(
+    () =>
+      createBalancePaymentForOrder({ orderNumber: "ORDER-P10-PAID", userId: String(order.userId) }),
+    /no outstanding balance/,
+  );
+});
+
+test("createBalancePaymentForOrder requires a matching guest email for guest checkouts", async (t) => {
+  const history = patchHistoryOnly();
+  const originalOrderFindOne = Order.findOne;
+  const originalSessionFindById = PaymentSession.findById;
+  const session = makeSession({
+    method: "razorpay",
+    outstandingAmount: 2000,
+    status: "partially_paid",
+  });
+  const order = {
+    _id: new Types.ObjectId(),
+    guestEmail: "real-guest@example.com",
+    orderNumber: "ORDER-P10-GUEST",
+    paymentSessionId: session._id,
+    userId: undefined,
+  };
+
+  (Order as unknown as { findOne: unknown }).findOne = (filter: { userId?: unknown }) =>
+    Promise.resolve(filter.userId ? null : order);
+  (PaymentSession as unknown as { findById: unknown }).findById = () => Promise.resolve(session);
+  t.after(() => {
+    (Order as unknown as { findOne: unknown }).findOne = originalOrderFindOne;
+    (PaymentSession as unknown as { findById: unknown }).findById = originalSessionFindById;
+    history.restore();
+  });
+
+  await assert.rejects(
+    () =>
+      createBalancePaymentForOrder({
+        guestEmail: "wrong@example.com",
+        orderNumber: "ORDER-P10-GUEST",
+      }),
+    /Order not found/,
+  );
+
+  const result = await createBalancePaymentForOrder({
+    guestEmail: "Real-Guest@example.com",
+    orderNumber: "ORDER-P10-GUEST",
+  });
+
+  assert.ok(result.gatewayOrder.id);
+});
+
 function makeSession(payload: Record<string, unknown>) {
   const session = new PaymentSession({
     amount: 1000,
@@ -264,6 +485,39 @@ function makeSession(payload: Record<string, unknown>) {
   });
   session.save = async () => session;
   return session;
+}
+
+function patchOrderModels(overrides: Record<string, unknown> = {}) {
+  const originalOrderFindOne = Order.findOne;
+  const originalTimelineCreate = OrderTimeline.create;
+  const timelineEvents: Array<Record<string, unknown>> = [];
+  const order: Record<string, unknown> & { save: () => Promise<unknown> } = {
+    guestEmail: undefined,
+    items: [],
+    orderNumber: "ORDER-P10",
+    paymentMode: "full",
+    shippingAddress: undefined,
+    status: "pending_payment",
+    stockReservations: [],
+    totals: { currencyCode: "INR", grandTotal: 5000 },
+    save: async () => order,
+    ...overrides,
+  };
+
+  (Order as unknown as { findOne: unknown }).findOne = () => Promise.resolve(order);
+  (OrderTimeline as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    timelineEvents.push(payload);
+    return Promise.resolve(payload);
+  };
+
+  return {
+    order,
+    timelineEvents,
+    restore() {
+      (Order as unknown as { findOne: unknown }).findOne = originalOrderFindOne;
+      (OrderTimeline as unknown as { create: unknown }).create = originalTimelineCreate;
+    },
+  };
 }
 
 function patchHistoryOnly() {

@@ -46,15 +46,39 @@ export default async function HomePage() {
   const socialTiles = [...productTiles, ...categoryTiles, ...collectionTiles].slice(0, 7);
 
   return (
-    <div className="bg-[#fbf7ef] text-[#211f1c]">
-      <div className="h-[3px] bg-[linear-gradient(90deg,#6e1423,#caa14e,#6e1423)]" />
-      <Hero slides={heroSlides} />
-      <SquareTileRail tiles={topTiles} />
-      <StoryBand image={storyImage} />
-      <CollectionGrid tiles={collectionTiles.length ? collectionTiles : categoryTiles} />
-      <ProductGrid products={productTiles} />
-      <TrustStrip />
-      <SocialGrid tiles={socialTiles} />
+    <div className="relative bg-[#fbf7ef] text-[#211f1c]">
+      <DamaskBackdrop />
+      <div className="relative">
+        <div className="h-[3px] bg-[linear-gradient(90deg,#6e1423,#caa14e,#6e1423)]" />
+        <div className="flex items-center justify-center gap-2 border-b border-[#e1d6c4] bg-[#fffdf8] py-1.5 text-[#9b6d35]">
+          <span className="h-px w-6 bg-[#caa14e]/70" />
+          <span className="text-[10px] font-semibold uppercase tracking-[0.34em]">
+            The Vastra House
+          </span>
+          <span className="h-px w-6 bg-[#caa14e]/70" />
+        </div>
+        <Hero slides={heroSlides} />
+        <SquareTileRail tiles={topTiles} />
+        <StoryBand image={storyImage} />
+        <CollectionGrid tiles={collectionTiles.length ? collectionTiles : categoryTiles} />
+        <ProductGrid products={productTiles} />
+        <TrustStrip />
+        <SocialGrid tiles={socialTiles} />
+      </div>
+      <style>{`
+        @keyframes heroFade {
+          0%, 100% { opacity: 0; }
+          4%, 28% { opacity: 1; }
+          34%, 96% { opacity: 0; }
+        }
+        @keyframes royalRise {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [style*="heroFade"], .royal-rise { animation: none !important; opacity: 1 !important; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -129,44 +153,66 @@ function Hero({ slides }: Readonly<{ slides: CmsHeroSlide[] }>) {
             )}
           </div>
         ))}
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(46_12_18/0.82),rgb(46_12_18/0.46)_48%,rgb(46_12_18/0.1))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(46_12_18/0.86),rgb(46_12_18/0.5)_48%,rgb(46_12_18/0.12))]" />
+
+        {/* Royal inset frame + corner filigree */}
+        <div className="pointer-events-none absolute inset-3 border border-[#caa14e]/45 sm:inset-5 md:inset-6">
+          <div className="absolute inset-[3px] border border-[#caa14e]/20" />
+          <CornerFiligree className="absolute -left-px -top-px text-[#caa14e]/80" />
+          <CornerFiligree className="absolute -right-px -top-px rotate-90 text-[#caa14e]/80" />
+          <CornerFiligree className="absolute -bottom-px -right-px rotate-180 text-[#caa14e]/80" />
+          <CornerFiligree className="absolute -bottom-px -left-px -rotate-90 text-[#caa14e]/80" />
+        </div>
+
         <div className="absolute inset-0 flex items-center">
-          <div className="mx-auto w-full max-w-7xl px-5">
+          <div className="mx-auto w-full max-w-7xl px-8 sm:px-12">
             <div
-              className={`max-w-xl ${slides[0]?.fontFamily === "sans" ? "" : "font-serif"}`}
-              style={{ color: slides[0]?.textColor ?? "#ffffff" }}
+              className={`royal-rise max-w-xl ${slides[0]?.fontFamily === "sans" ? "" : "font-serif"}`}
+              style={{
+                color: slides[0]?.textColor ?? "#ffffff",
+                animation: "royalRise 0.9s ease-out both",
+              }}
             >
-              <span className="inline-flex items-center border border-[#caa14e]/70 px-3 py-1 font-sans text-[11px] font-semibold uppercase tracking-[0.24em] text-[#f0d9a4]">
+              <span className="inline-flex items-center gap-2 border border-[#caa14e]/70 bg-[#2e0c12]/40 px-3 py-1 font-sans text-[11px] font-semibold uppercase tracking-[0.26em] text-[#f0d9a4] backdrop-blur-sm">
+                <span aria-hidden="true" className="text-[#caa14e]">
+                  ❖
+                </span>
                 {slides[0]?.eyebrow ?? "New Season Edit"}
               </span>
               <h1
-                className={`mt-5 font-semibold leading-[1.08] drop-shadow-sm ${heroTitleSize(slides[0]?.fontSize)}`}
+                className={`mt-5 font-semibold leading-[1.06] drop-shadow-sm ${heroTitleSize(slides[0]?.fontSize)}`}
               >
                 {slides[0]?.title ?? "Timeless Style, Rooted in Heritage"}
               </h1>
-              <div className="mt-4 h-px w-20 bg-[#caa14e]" />
+              <div className="mt-5 flex items-center gap-2">
+                <span className="h-px w-16 bg-[#caa14e]" />
+                <span aria-hidden="true" className="text-xs text-[#caa14e]">
+                  ✦
+                </span>
+                <span className="h-px w-8 bg-[#caa14e]/60" />
+              </div>
               <p className="mt-4 max-w-md font-sans text-sm leading-7 text-white/90 sm:text-base">
                 {slides[0]?.copy ?? "Premium tops, suits and clothing crafted for the modern you."}
               </p>
               {slides[0]?.primaryCta?.href ? (
                 <a
-                  className="mt-6 inline-flex h-11 items-center gap-2 border border-[#caa14e] bg-[#6e1423] px-6 font-sans text-sm font-semibold uppercase tracking-wide text-white transition-colors duration-200 hover:bg-[#84182c]"
+                  className="group relative mt-7 inline-flex h-12 items-center gap-2 border border-[#caa14e] bg-[#6e1423] px-7 font-sans text-sm font-semibold uppercase tracking-[0.12em] text-white shadow-[0_8px_24px_-12px_rgba(46,12,18,0.9)] transition-colors duration-200 hover:bg-[#84182c]"
                   href={slides[0].primaryCta.href}
                 >
-                  {slides[0].primaryCta.label} <ArrowRight aria-hidden="true" size={16} />
+                  <span className="absolute left-1 top-1 size-1.5 border-l border-t border-[#f0d9a4]/70" />
+                  <span className="absolute bottom-1 right-1 size-1.5 border-b border-r border-[#f0d9a4]/70" />
+                  {slides[0].primaryCta.label}
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="transition-transform duration-200 group-hover:translate-x-0.5"
+                    size={16}
+                  />
                 </a>
               ) : null}
             </div>
           </div>
         </div>
       </div>
-      <style>{`
-        @keyframes heroFade {
-          0%, 100% { opacity: 0; }
-          4%, 28% { opacity: 1; }
-          34%, 96% { opacity: 0; }
-        }
-      `}</style>
     </section>
   );
 }
@@ -177,10 +223,10 @@ function SquareTileRail({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 border-b border-[#e1d6c4] px-5 sm:grid-cols-3 lg:grid-cols-5">
+    <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 border-b border-[#e1d6c4] px-5 py-5 sm:grid-cols-3 lg:grid-cols-5">
       {tiles.map((tile) => (
         <a
-          className="group overflow-hidden rounded-sm border border-[#e1d6c4] bg-white transition-shadow duration-200 hover:shadow-md"
+          className="group relative overflow-hidden rounded-sm border border-[#e1d6c4] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_14px_30px_-18px_rgba(110,20,35,0.55)]"
           href={tile.href}
           key={tile.href}
         >
@@ -188,13 +234,16 @@ function SquareTileRail({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
             <ResponsiveImage
               alt={tile.media.alt}
               aspectRatio="1 / 1"
-              className="transition-transform duration-300 group-hover:scale-105"
+              className="transition-transform duration-500 group-hover:scale-105"
               sizes="(max-width: 1024px) 50vw, 20vw"
               src={tile.media.src}
             />
+            <span className="pointer-events-none absolute inset-2 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/60" />
           </div>
           <div className="border-t border-[#e1d6c4] px-3 py-3 text-center">
-            <h2 className="font-serif text-lg uppercase">{tile.title}</h2>
+            <h2 className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">
+              {tile.title}
+            </h2>
             <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#9b6d35] transition-transform duration-200 group-hover:translate-x-0.5">
               Shop Now <ArrowRight aria-hidden="true" size={14} />
             </span>
@@ -208,34 +257,40 @@ function SquareTileRail({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
 function StoryBand({ image }: Readonly<{ image: string }>) {
   return (
     <section className="grid border-y border-[#e1d6c4] bg-[#fffdf8] lg:grid-cols-[40%_60%]">
-      <div className="flex items-center px-6 py-8 lg:justify-center">
+      <div className="flex items-center px-6 py-10 lg:justify-center">
         <div className="max-w-md">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9b6d35]">
-            Our Story
-          </p>
-          <h2 className="mt-3 font-serif text-3xl leading-tight sm:text-4xl">
+          <div className="flex items-center gap-2 text-[#9b6d35]">
+            <span aria-hidden="true" className="text-sm text-[#caa14e]">
+              ❖
+            </span>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em]">Our Story</p>
+          </div>
+          <h2 className="mt-3 font-serif text-3xl leading-tight text-[#3d1620] sm:text-4xl">
             Crafted with Passion, Worn with Pride.
           </h2>
-          <div className="my-4 h-px w-48 bg-[#bd9b6a]" />
-          <p className="text-sm leading-6 text-muted-foreground">
+          <FiligreeDivider align="start" className="my-5" />
+          <p className="text-sm leading-7 text-muted-foreground">
             We blend timeless tradition with contemporary designs to bring premium quality clothing
             that celebrates your individuality.
           </p>
           <a
-            className="mt-5 inline-flex h-10 items-center gap-2 border border-[#6e1423] px-4 text-xs font-semibold uppercase tracking-wide text-[#6e1423] transition-colors duration-200 hover:bg-[#6e1423] hover:text-white"
+            className="mt-6 inline-flex h-10 items-center gap-2 border border-[#6e1423] px-5 text-xs font-semibold uppercase tracking-[0.1em] text-[#6e1423] transition-colors duration-200 hover:bg-[#6e1423] hover:text-white"
             href="/about"
           >
             Know More About Us <ArrowRight aria-hidden="true" size={14} />
           </a>
         </div>
       </div>
-      <ResponsiveImage
-        alt="Wide embroidered fabric detail for The Vastra House story"
-        aspectRatio="16 / 7"
-        className="h-full"
-        sizes="(max-width: 1024px) 100vw, 60vw"
-        src={image}
-      />
+      <div className="relative">
+        <ResponsiveImage
+          alt="Wide embroidered fabric detail for The Vastra House story"
+          aspectRatio="16 / 7"
+          className="h-full"
+          sizes="(max-width: 1024px) 100vw, 60vw"
+          src={image}
+        />
+        <span className="pointer-events-none absolute inset-4 border border-[#caa14e]/40" />
+      </div>
     </section>
   );
 }
@@ -246,28 +301,34 @@ function CollectionGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-4 pt-2">
+    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-8 pt-6">
       <SectionTitle title="Our Collections" />
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div className="mt-1 grid gap-4 md:grid-cols-3">
         {tiles.slice(0, 3).map((tile) => (
           <a
             className="group relative block overflow-hidden rounded-sm"
             href={tile.href}
             key={tile.href}
           >
-            <ResponsiveImage
-              alt={tile.media.alt}
-              aspectRatio="1 / 1"
-              className="transition-transform duration-300 group-hover:scale-105"
-              sizes="(max-width: 768px) 100vw, 33vw"
-              src={tile.media.src}
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(0deg,rgb(32_22_12/0.78),transparent_62%)]" />
-            <div className="absolute bottom-0 left-0 p-4 text-white">
-              <h3 className="font-serif text-2xl uppercase leading-tight">{tile.title}</h3>
-              <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide transition-transform duration-200 group-hover:translate-x-0.5">
-                Explore Collection <ArrowRight aria-hidden="true" size={14} />
-              </span>
+            <div className="relative overflow-hidden" style={{ aspectRatio: "4 / 5" }}>
+              <ResponsiveImage
+                alt={tile.media.alt}
+                aspectRatio="4 / 5"
+                className="z-0 transition-transform duration-500 group-hover:scale-105"
+                sizes="(max-width: 768px) 100vw, 33vw"
+                src={tile.media.src}
+              />
+              <div className="absolute inset-0 z-10 bg-[linear-gradient(0deg,rgb(32_22_12/0.82),transparent_56%)]" />
+              {/* Signature: cusped ogee arch window (jharokha) */}
+              <ArchMatte className="absolute inset-0 z-20" />
+              <div className="absolute bottom-0 left-0 z-30 p-6 text-white">
+                <h3 className="font-serif text-2xl uppercase leading-tight tracking-wide pl-2">
+                  {tile.title}
+                </h3>
+                <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#f0d9a4] transition-transform duration-200 group-hover:translate-x-0.5 pl-2">
+                  Explore Collection <ArrowRight aria-hidden="true" size={14} />
+                </span>
+              </div>
             </div>
           </a>
         ))}
@@ -282,12 +343,12 @@ function ProductGrid({ products }: Readonly<{ products: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-4 pt-2">
+    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-8 pt-6">
       <SectionTitle title="New Arrivals" />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {products.slice(0, 8).map((product) => (
           <a
-            className="group rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-shadow duration-200 hover:shadow-md"
+            className="group relative rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_16px_34px_-20px_rgba(110,20,35,0.6)]"
             href={product.href}
             key={product.href}
           >
@@ -295,20 +356,21 @@ function ProductGrid({ products }: Readonly<{ products: VisualTile[] }>) {
               <ResponsiveImage
                 alt={product.media.alt}
                 aspectRatio="1 / 1"
-                className="transition-transform duration-300 group-hover:scale-105"
+                className="transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 640px) 100vw, 25vw"
                 src={product.media.src}
               />
+              <span className="pointer-events-none absolute inset-1.5 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/55" />
               {product.pricing?.hasSale ? (
-                <span className="absolute left-2 top-2 rounded-sm bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                <span className="absolute left-2 top-2 rounded-sm border border-[#f0d9a4]/50 bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
                   Sale
                 </span>
               ) : null}
             </div>
-            <div className="pt-2.5">
-              <h3 className="font-medium">{product.title}</h3>
+            <div className="pt-3">
+              <h3 className="font-serif text-[15px] font-medium text-[#3d1620]">{product.title}</h3>
               {product.subtitle ? (
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
                   <span className="font-semibold text-[#3d2a18]">
                     {product.pricing?.price ?? product.subtitle}
                   </span>
@@ -342,20 +404,22 @@ function TrustStrip() {
   ];
 
   return (
-    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 py-3">
-      <div className="grid gap-0 rounded-sm border border-[#e1d6c4] bg-white md:grid-cols-5">
+    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 py-6">
+      <div className="grid gap-0 rounded-sm border border-[#e1d6c4] bg-[linear-gradient(180deg,#fffdf8,#fdf6e8)] md:grid-cols-5">
         {items.map((item) => {
           const Icon = item.icon;
 
           return (
             <div
-              className="border-[#e1d6c4] p-4 text-center md:border-r last:md:border-r-0"
+              className="border-[#e1d6c4] p-5 text-center md:border-r last:md:border-r-0"
               key={item.label}
             >
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full border border-[#caa14e] bg-[#fdf6e8]">
+              <span className="relative mx-auto flex size-12 items-center justify-center rounded-full border border-[#caa14e] bg-[#fdf6e8] shadow-[inset_0_0_0_3px_rgba(202,161,78,0.18)]">
                 <Icon aria-hidden="true" className="text-[#6e1423]" size={22} />
               </span>
-              <h3 className="mt-3 text-sm font-semibold uppercase">{item.label}</h3>
+              <h3 className="mt-3 font-serif text-sm font-semibold uppercase tracking-wide text-[#3d1620]">
+                {item.label}
+              </h3>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.text}</p>
             </div>
           );
@@ -371,20 +435,28 @@ function SocialGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-5 pb-4 pt-2">
-      <h2 className="text-center text-base font-semibold uppercase tracking-wide">
-        Follow Us @VastraHouse
-      </h2>
-      <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
+    <section className="mx-auto max-w-7xl px-5 pb-10 pt-6">
+      <div className="flex items-center justify-center gap-3 text-[#caa14e]">
+        <span className="h-px w-8 bg-[#caa14e]/70" />
+        <h2 className="text-center text-base font-semibold uppercase tracking-[0.18em] text-[#3d1620]">
+          Follow Us @VastraHouse
+        </h2>
+        <span className="h-px w-8 bg-[#caa14e]/70" />
+      </div>
+      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
         {tiles.map((tile) => (
-          <div className="overflow-hidden" key={tile.href}>
+          <div
+            className="group relative overflow-hidden rounded-sm border border-[#e1d6c4]"
+            key={tile.href}
+          >
             <ResponsiveImage
               alt={tile.media.alt}
               aspectRatio="1 / 1"
-              className="transition-transform duration-300 hover:scale-105"
+              className="transition-transform duration-500 group-hover:scale-110"
               sizes="(max-width: 640px) 50vw, 14vw"
               src={tile.media.src}
             />
+            <span className="pointer-events-none absolute inset-0 bg-[#2e0c12]/0 transition-colors duration-200 group-hover:bg-[#2e0c12]/15" />
           </div>
         ))}
       </div>
@@ -395,15 +467,102 @@ function SocialGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
 function SectionTitle({ title }: Readonly<{ title: string }>) {
   return (
     <div className="text-center">
-      <div className="flex items-center justify-center gap-3 text-[#caa14e]">
-        <span className="h-px w-10 bg-[#caa14e]" />
-        <span>✦</span>
-        <span className="h-px w-10 bg-[#caa14e]" />
-      </div>
-      <h2 className="mt-2 font-serif text-2xl uppercase tracking-[0.06em] text-[#3d1620]">
+      <FiligreeDivider align="center" />
+      <h2 className="mt-3 font-serif text-2xl uppercase tracking-[0.08em] text-[#3d1620] sm:text-[28px]">
         {title}
       </h2>
     </div>
+  );
+}
+
+/* ---------- Royal ornamental helpers (presentational only) ---------- */
+
+function FiligreeDivider({
+  align = "center",
+  className = "",
+}: Readonly<{ align?: "center" | "start"; className?: string }>) {
+  return (
+    <div
+      className={`flex items-center gap-2 text-[#caa14e] ${align === "center" ? "justify-center" : "justify-start"} ${className}`}
+    >
+      <span className="h-px w-10 bg-[linear-gradient(90deg,transparent,#caa14e)]" />
+      <svg aria-hidden="true" height="14" viewBox="0 0 56 14" width="56">
+        <path
+          d="M2 7c8-6 14-6 18 0-4 6-10 6-18 0Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+        />
+        <circle cx="28" cy="7" fill="#6e1423" r="2.4" />
+        <path
+          d="M54 7c-8-6-14-6-18 0 4 6 10 6 18 0Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+        />
+      </svg>
+      <span className="h-px w-10 bg-[linear-gradient(90deg,#caa14e,transparent)]" />
+    </div>
+  );
+}
+
+function CornerFiligree({ className = "" }: Readonly<{ className?: string }>) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      height="34"
+      stroke="currentColor"
+      strokeWidth="1"
+      viewBox="0 0 34 34"
+      width="34"
+    >
+      <path d="M1 12C1 6 6 1 12 1" />
+      <path d="M1 20c6 0 11-5 11-11" />
+      <circle cx="12" cy="12" fill="currentColor" r="1.6" stroke="none" />
+    </svg>
+  );
+}
+
+function ArchMatte({ className = "" }: Readonly<{ className?: string }>) {
+  return (
+    <svg aria-hidden="true" className={className} preserveAspectRatio="none" viewBox="0 0 400 500">
+      {/* Cream matte everywhere except a cusped ogee arch window */}
+      <path
+        d="M0 0 H400 V500 H0 Z M30 476 L30 210 C30 110 150 130 200 34 C250 130 370 110 370 210 L370 476 Z"
+        fill="#fbf7ef"
+        fillRule="evenodd"
+      />
+      {/* Gold arch outline (double rule) */}
+      <path
+        d="M30 476 L30 210 C30 110 150 130 200 34 C250 130 370 110 370 210 L370 476"
+        fill="none"
+        stroke="#caa14e"
+        strokeWidth="3"
+      />
+      <path
+        d="M40 476 L40 214 C40 122 152 140 200 50 C248 140 360 122 360 214 L360 476"
+        fill="none"
+        stroke="#caa14e"
+        strokeOpacity="0.35"
+        strokeWidth="1"
+      />
+    </svg>
+  );
+}
+
+function DamaskBackdrop() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 opacity-[0.05]"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at 1px 1px, #6e1423 1px, transparent 0), radial-gradient(circle at 21px 21px, #caa14e 1.4px, transparent 0)",
+        backgroundSize: "42px 42px",
+      }}
+    />
   );
 }
 

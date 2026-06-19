@@ -169,3 +169,30 @@ export function fetchCheckoutOrder(orderNumber: string, accessToken?: string) {
     { accessToken },
   );
 }
+
+export type BalancePaymentResponse = {
+  gatewayOrder: {
+    id: string;
+    amount: number;
+    currency: string;
+    receipt?: string;
+    status?: string;
+  };
+  order: CheckoutOrder;
+  session: PaymentSession;
+};
+
+export function createOrderBalancePayment(
+  orderNumber: string,
+  guestEmail: string | undefined,
+  accessToken?: string,
+) {
+  return apiFetch<BalancePaymentResponse>(
+    `/checkout/orders/${encodeURIComponent(orderNumber)}/balance/razorpay`,
+    {
+      accessToken,
+      body: JSON.stringify({ guestEmail }),
+      method: "POST",
+    },
+  );
+}

@@ -24,39 +24,11 @@ import {
   uploadPaymentScreenshot,
   type PaymentSettings,
 } from "@/lib/payments";
+import { loadRazorpayScript } from "@/lib/razorpay";
 import { useAuthStore } from "@/stores/authStore";
 import { useCartStore } from "@/stores/cartStore";
 
 const steps = ["Order Type", "Address", "Payment", "Review"] as const;
-
-type RazorpaySuccessResponse = {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayCheckout = {
-  open: () => void;
-};
-
-type RazorpayConstructor = new (options: {
-  amount: number;
-  currency: string;
-  description: string;
-  handler: (response: RazorpaySuccessResponse) => void;
-  key: string;
-  modal?: { ondismiss?: () => void };
-  name: string;
-  order_id: string;
-  prefill?: { contact?: string; email?: string; name?: string };
-  theme?: { color?: string };
-}) => RazorpayCheckout;
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayConstructor;
-  }
-}
 
 const paymentMethods: Array<{
   value: CheckoutPaymentMethod;
@@ -79,7 +51,7 @@ export function CheckoutClient() {
   const [step, setStep] = useState(0);
   const [shippingMethod, setShippingMethod] = useState<CheckoutShippingMethod>("standard");
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod>("razorpay");
-  const [paymentMode, setPaymentMode] = useState<"full" | "advance" | "balance">("full");
+  const [paymentMode, setPaymentMode] = useState<"full" | "advance">("full");
   const [addressDraft, setAddressDraft] = useState({
     city: "",
     countryCode: "IN",
@@ -674,14 +646,11 @@ export function CheckoutClient() {
                   className="mt-2 h-10 w-full rounded-md border border-border px-3"
                   disabled={hasPreOrder}
                   name="paymentMode"
-                  onChange={(event) =>
-                    setPaymentMode(event.target.value as "full" | "advance" | "balance")
-                  }
+                  onChange={(event) => setPaymentMode(event.target.value as "full" | "advance")}
                   value={hasPreOrder ? requiredPaymentMode : paymentMode}
                 >
                   <option value="full">Full</option>
                   <option value="advance">Advance</option>
-                  <option value="balance">Balance</option>
                 </select>
               </label>
               {hasPreOrder ? (
@@ -873,34 +842,6 @@ export function CheckoutClient() {
       </aside>
     </form>
   );
-}
-
-function loadRazorpayScript() {
-  return new Promise<void>((resolve, reject) => {
-    if (window.Razorpay) {
-      resolve();
-      return;
-    }
-
-    const existing = document.querySelector<HTMLScriptElement>(
-      'script[src="https://checkout.razorpay.com/v1/checkout.js"]',
-    );
-
-    if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
-      existing.addEventListener("error", () => reject(new Error("Razorpay script failed")), {
-        once: true,
-      });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Razorpay script failed"));
-    document.body.appendChild(script);
-  });
 }
 
 function validateRequiredCheckoutFields(formData: FormData) {
@@ -1130,8 +1071,7 @@ function buildPayload(
     payableNow: numberOrUndefined(formData, "payableNow"),
     paymentMethod,
     paymentMode:
-      lockedPaymentMode ??
-      ((text(formData, "paymentMode") || "full") as "full" | "advance" | "balance"),
+      lockedPaymentMode ?? ((text(formData, "paymentMode") || "full") as "full" | "advance"),
     rewardValueRequested: numberOrUndefined(formData, "rewardValueRequested"),
     shippingAddress,
     shippingMethod,

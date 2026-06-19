@@ -4,7 +4,6 @@ import { AppError } from "../middleware/errorHandler.js";
 import { Cart } from "../models/Cart.js";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
-import { logger } from "../utils/logger.js";
 import {
   createCodPayment,
   createManualPayment,
@@ -16,6 +15,7 @@ import {
   getAvailableStockBySku,
   reserveOrderStock,
 } from "./inventoryService.js";
+import { sendOrderConfirmationEmail } from "./orderFulfillmentService.js";
 import {
   assertPreOrderWindow,
   createProductionTrackersForOrder,
@@ -24,9 +24,7 @@ import {
   reservePreOrderSlots,
   type PreOrderVariantSnapshot,
 } from "./preOrderService.js";
-import { sendEmail } from "./emailService.js";
-import { buildOrderConfirmationTemplate } from "./emailTemplateService.js";
-import { getRuntimeNumberSetting, getRuntimeSetting } from "./runtimeSettingsService.js";
+import { getRuntimeNumberSetting } from "./runtimeSettingsService.js";
 
 export type CheckoutAddress = {
   fullName?: string;
@@ -132,19 +130,20 @@ export async function createOrderFromCheckout(input: CheckoutInput) {
     hasPreOrderItems,
   );
   const preOrderItems = calculation.items.filter((item) => item.preOrder?.enabled);
+  const regularItems = calculation.items.filter((item) => !item.preOrder?.enabled);
   const preOrderReservations = preOrderItems.length
     ? await reservePreOrderSlots(preOrderItems)
     : [];
   let stockReservations: Awaited<ReturnType<typeof reserveOrderStock>> = [];
 
   try {
-    stockReservations = hasPreOrderItems
-      ? []
-      : await reserveOrderStock({
+    stockReservations = regularItems.length
+      ? await reserveOrderStock({
           actor: { actorId: checkoutActorId(input), actorType: "customer" },
-          items: calculation.items,
+          items: regularItems,
           referenceId: orderNumber,
-        });
+        })
+      : [];
   } catch (error) {
     await releasePreOrderSlots(preOrderReservations);
     throw error;
@@ -170,14 +169,19 @@ export async function createOrderFromCheckout(input: CheckoutInput) {
     guestSessionId: input.guestSessionId,
   });
 
-  if (status === "confirmed" || status === "cod_confirmed") {
+  if (
+    stockReservations.length &&
+    (status === "confirmed" || status === "cod_confirmed" || status === "pre_order_confirmed")
+  ) {
     await deductOrderReservedStock({
       actor: { actorId: checkoutActorId(input), actorType: "customer" },
       referenceId: orderNumber,
       reservations: stockReservations,
     });
     for (const reservation of order.stockReservations) {
-      reservation.status = "deducted";
+      if (reservation.status === "reserved") {
+        reservation.status = "deducted";
+      }
     }
     await order.save();
   }
@@ -424,52 +428,6 @@ function checkoutActorId(input: Pick<CheckoutInput, "guestEmail" | "guestSession
   return input.userId ?? input.guestSessionId ?? input.guestEmail ?? "guest";
 }
 
-export async function sendOrderConfirmationEmail(
-  input: Pick<CheckoutInput, "guestEmail" | "shippingAddress">,
-  order: { orderNumber: string; totals: { grandTotal: number; currencyCode: string } },
-  payableNow: number,
-) {
-  const email = input.guestEmail;
-
-  if (!email) {
-    return;
-  }
-
-  const total = formatCheckoutMoney(order.totals.grandTotal, order.totals.currencyCode);
-  const dueNow = formatCheckoutMoney(payableNow, order.totals.currencyCode);
-  const balanceRemaining = formatCheckoutMoney(
-    Math.max(0, order.totals.grandTotal - payableNow),
-    order.totals.currencyCode,
-  );
-
-  try {
-    await sendEmail(
-      email,
-      buildOrderConfirmationTemplate({
-        balanceRemaining,
-        customerName: input.shippingAddress.fullName,
-        dueNow,
-        orderNumber: order.orderNumber,
-        total,
-        trackUrl: `${await frontendPublicUrl()}/track-order?order=${encodeURIComponent(order.orderNumber)}`,
-      }),
-    );
-  } catch (error) {
-    logger.warn(
-      { error, orderNumber: order.orderNumber, to: email },
-      "Order confirmation email failed after checkout",
-    );
-  }
-}
-
-function formatCheckoutMoney(value: number, currencyCode: string) {
-  return new Intl.NumberFormat("en-IN", {
-    currency: currencyCode,
-    maximumFractionDigits: 0,
-    style: "currency",
-  }).format(value);
-}
-
 async function loadProductForCheckout(productId: string, variantId: string): Promise<ProductLean> {
   const product = (await Product.findOne({
     _id: productId,
@@ -525,12 +483,15 @@ function assertPreOrderPaymentMode(
   paymentMode: "full" | "advance" | "balance",
   requiredMode?: "full" | "advance",
 ) {
-  if (!hasPreOrderItems) {
-    return;
+  if (paymentMode === "balance") {
+    throw new AppError(
+      "Balance payment mode is only available for paying an existing order's outstanding balance",
+      400,
+    );
   }
 
-  if (paymentMode === "balance") {
-    throw new AppError("Balance payment is only allowed for existing pre-order balances", 400);
+  if (!hasPreOrderItems) {
+    return;
   }
 
   if (requiredMode && paymentMode !== requiredMode) {
@@ -561,10 +522,6 @@ async function calculateShippingFee(itemSubtotal: number, method: "standard" | "
   }
 
   return method === "express" ? expressFee : standardFee;
-}
-
-async function frontendPublicUrl() {
-  return (await getRuntimeSetting("FRONTEND_PUBLIC_URL")) ?? env.FRONTEND_PUBLIC_URL;
 }
 
 function calculateCouponStubDiscount(_couponCode?: string) {

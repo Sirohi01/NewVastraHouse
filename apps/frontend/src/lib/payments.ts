@@ -31,6 +31,37 @@ export type PaymentSession = {
   createdAt?: string;
 };
 
+export type PaginatedPaymentSessions = {
+  data: PaymentSession[];
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
+
+export function fetchAdminPaymentSessions(
+  input: { status?: PaymentStatus; search?: string; page?: number; limit?: number },
+  accessToken?: string,
+) {
+  const params = new URLSearchParams();
+  if (input.status) {
+    params.set("status", input.status);
+  }
+  if (input.search) {
+    params.set("search", input.search);
+  }
+  params.set("page", String(input.page ?? 1));
+  params.set("limit", String(input.limit ?? 20));
+
+  return apiFetch<PaginatedPaymentSessions>(`/payments/admin/sessions?${params.toString()}`, {
+    accessToken,
+  });
+}
+
 export type PaymentHistoryItem = {
   _id: string;
   orderReference: string;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAuth, requirePermission } from "../middleware/authMiddleware.js";
 import { rateLimit } from "../middleware/rateLimit.js";
 import { validateRequest } from "../middleware/validateRequest.js";
-import { PaymentSession } from "../models/PaymentSession.js";
+import { PaymentSession, paymentStatuses } from "../models/PaymentSession.js";
 import { PaymentWebhookEvent } from "../models/PaymentWebhookEvent.js";
 import {
   approveManualPayment,
@@ -17,6 +17,7 @@ import {
   verifyRazorpayPayment,
 } from "../services/paymentService.js";
 import { getPaymentSettings, savePaymentSettings } from "../services/paymentSettingsService.js";
+import { buildPaginatedResult, parsePagination } from "../utils/pagination.js";
 
 export const paymentWebhookRouter = Router();
 export const paymentsRouter = Router();
@@ -217,6 +218,44 @@ paymentsRouter.get(
 );
 
 paymentsRouter.get(
+  "/admin/sessions",
+  requirePermission({ module: "payments", action: "manage" }),
+  validateRequest({
+    query: z
+      .object({
+        limit: z.coerce.number().int().positive().max(100).optional(),
+        page: z.coerce.number().int().positive().optional(),
+        search: z.string().max(120).optional(),
+        status: z.enum(paymentStatuses).optional(),
+      })
+      .strict(),
+  }),
+  async (req, res, next) => {
+    try {
+      const pagination = parsePagination(req.query);
+      const filter = {
+        ...(req.query.status ? { status: req.query.status } : {}),
+        ...(req.query.search
+          ? { orderReference: { $regex: escapeRegExp(String(req.query.search)), $options: "i" } }
+          : {}),
+      };
+      const [sessions, total] = await Promise.all([
+        PaymentSession.find(filter)
+          .sort({ createdAt: -1 })
+          .skip(pagination.skip)
+          .limit(pagination.limit)
+          .lean(),
+        PaymentSession.countDocuments(filter),
+      ]);
+
+      res.json(buildPaginatedResult(sessions, total, pagination));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+paymentsRouter.get(
   "/admin/webhook-events",
   requirePermission({ module: "payments", action: "manage" }),
   async (_req, res, next) => {
@@ -272,3 +311,7 @@ paymentsRouter.post(
     }
   },
 );
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

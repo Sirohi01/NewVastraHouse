@@ -9,15 +9,18 @@ export function Pagination({
   }
 
   return (
-    <nav className="mt-8 flex items-center justify-center gap-3">
+    <nav className="mt-10 flex items-center justify-center gap-4">
       <PageLink
         disabled={!meta.hasPreviousPage}
         label="Previous"
         page={meta.page - 1}
         query={query}
       />
-      <span className="text-sm text-muted-foreground">
-        Page {meta.page} of {meta.totalPages}
+      <span className="flex items-center gap-2 font-serif text-sm text-[#3d1620]">
+        <span aria-hidden="true" className="text-xs text-[#caa14e]">
+          ✦
+        </span>
+        Page <span className="font-semibold text-[#6e1423]">{meta.page}</span> of {meta.totalPages}
       </span>
       <PageLink disabled={!meta.hasNextPage} label="Next" page={meta.page + 1} query={query} />
     </nav>
@@ -41,10 +44,10 @@ function PageLink({
   return (
     <a
       aria-disabled={disabled}
-      className={`h-10 rounded-md border px-4 py-2 text-sm font-semibold ${
+      className={`h-10 rounded-sm border px-5 py-2 text-sm font-semibold uppercase tracking-wide transition-colors ${
         disabled
-          ? "pointer-events-none border-border text-muted-foreground"
-          : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+          ? "pointer-events-none border-[#e1d6c4] text-[#b3a692]"
+          : "border-[#6e1423] text-[#6e1423] hover:bg-[#6e1423] hover:text-white"
       }`}
       href={`?${params.toString()}`}
     >

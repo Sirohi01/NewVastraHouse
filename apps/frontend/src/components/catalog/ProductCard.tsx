@@ -28,7 +28,7 @@ export function ProductCard({
 
   return (
     <article
-      className={`group rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-shadow duration-200 hover:shadow-md ${
+      className={`group rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_18px_38px_-22px_rgba(110,20,35,0.6)] ${
         view === "list" ? "grid gap-4 sm:grid-cols-[180px_1fr]" : ""
       }`}
     >
@@ -40,7 +40,7 @@ export function ProductCard({
           <ResponsiveImage
             alt={media.altText ?? product.name}
             aspectRatio="1 / 1"
-            className="transition-transform duration-300 group-hover:scale-105"
+            className="transition-transform duration-500 group-hover:scale-105"
             objectFit={media.objectFit ?? "cover"}
             sizes={view === "list" ? "180px" : "(max-width: 768px) 50vw, 25vw"}
             src={media.url}
@@ -50,14 +50,15 @@ export function ProductCard({
             {product.name}
           </div>
         )}
-        <span className="absolute right-3 top-3 grid size-8 place-items-center rounded-full border border-white/70 bg-white/30 text-white backdrop-blur">
+        <span className="pointer-events-none absolute inset-1.5 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/55" />
+        <span className="absolute right-3 top-3 grid size-8 place-items-center rounded-full border border-white/70 bg-white/30 text-white backdrop-blur transition-colors hover:bg-[#6e1423] hover:text-[#f0d9a4]">
           <Heart aria-hidden="true" size={17} />
         </span>
-        <span className="absolute bottom-3 right-3 grid size-9 place-items-center rounded-full bg-white text-[#6e1423] shadow-soft">
+        <span className="absolute bottom-3 right-3 grid size-9 place-items-center rounded-full border border-[#caa14e]/40 bg-white text-[#6e1423] shadow-soft">
           <Eye aria-hidden="true" size={17} />
         </span>
         {pricing.hasSale ? (
-          <span className="absolute left-3 top-3 rounded-sm bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+          <span className="absolute left-3 top-3 rounded-sm border border-[#f0d9a4]/50 bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-white">
             Sale
           </span>
         ) : null}
@@ -66,7 +67,7 @@ export function ProductCard({
           .slice(0, 1)
           .map(([badge]) => (
             <span
-              className={`absolute left-3 rounded-sm bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[#6e1423] ${
+              className={`absolute left-3 rounded-sm border border-[#caa14e]/40 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6e1423] ${
                 pricing.hasSale ? "top-11" : "top-3"
               }`}
               key={badge}
@@ -77,7 +78,7 @@ export function ProductCard({
       </Link>
       <div className="flex min-w-0 flex-col pt-2.5 sm:pt-0">
         <Link
-          className="font-medium leading-snug hover:text-primary"
+          className="font-serif font-medium leading-snug text-[#3d1620] transition-colors hover:text-[#6e1423]"
           href={`/shop/${product.slug}`}
         >
           {product.name}

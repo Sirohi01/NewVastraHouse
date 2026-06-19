@@ -148,6 +148,7 @@ const orderSchema = new Schema(
     shipment: shipmentSchema,
     stockReservations: [stockReservationSchema],
     notes: { type: String, trim: true },
+    balancePaymentNotifiedAt: { type: Date },
   },
   { timestamps: true },
 );

@@ -5,9 +5,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ErrorState } from "@/components/states/ErrorState";
-import { fetchCheckoutOrder, type CheckoutOrder } from "@/lib/checkout";
+import {
+  confirmCheckoutRazorpayPayment,
+  createOrderBalancePayment,
+  fetchCheckoutOrder,
+  fetchRazorpayCheckoutConfig,
+  type CheckoutOrder,
+} from "@/lib/checkout";
 import { formatMoney } from "@/lib/commerce";
 import type { PaymentSession } from "@/lib/payments";
+import { loadRazorpayScript } from "@/lib/razorpay";
 import { createReturnRequest } from "@/lib/returns";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -17,20 +24,89 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
   const [paymentSession, setPaymentSession] = useState<PaymentSession | null>();
   const [message, setMessage] = useState("");
   const [returnMessage, setReturnMessage] = useState("");
+  const [isPayingBalance, setIsPayingBalance] = useState(false);
+
+  async function loadOrder() {
+    try {
+      const result = await fetchCheckoutOrder(orderNumber, accessToken);
+      setOrder(result.order);
+      setPaymentSession(result.paymentSession ?? null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Order could not load");
+    }
+  }
 
   useEffect(() => {
-    async function loadOrder() {
-      try {
-        const result = await fetchCheckoutOrder(orderNumber, accessToken);
-        setOrder(result.order);
-        setPaymentSession(result.paymentSession ?? null);
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "Order could not load");
-      }
-    }
-
     void loadOrder();
   }, [accessToken, orderNumber]);
+
+  async function payBalanceNow() {
+    setIsPayingBalance(true);
+    setMessage("");
+    try {
+      const result = await createOrderBalancePayment(orderNumber, undefined, accessToken);
+      const config = await fetchRazorpayCheckoutConfig();
+
+      if (!config.keyId) {
+        setMessage("Razorpay key is not configured. Add RAZORPAY_KEY_ID in settings or .env.");
+        return;
+      }
+
+      if (!config.gatewayEnabled || result.gatewayOrder.id.startsWith("rzp_dev_")) {
+        setMessage(
+          "Razorpay gateway calls are disabled. Set RAZORPAY_ENABLE_GATEWAY_CALLS=true and restart backend.",
+        );
+        return;
+      }
+
+      await loadRazorpayScript();
+
+      if (!window.Razorpay) {
+        setMessage("Razorpay checkout could not load. Please try again.");
+        return;
+      }
+
+      const checkout = new window.Razorpay({
+        amount: result.gatewayOrder.amount,
+        currency: result.gatewayOrder.currency,
+        description: `Balance payment for ${orderNumber}`,
+        handler: (response) => {
+          void (async () => {
+            setMessage("Verifying balance payment...");
+            await confirmCheckoutRazorpayPayment({
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            });
+            setMessage("Balance payment received. Thank you!");
+            await loadOrder();
+          })().catch((error: unknown) => {
+            setMessage(
+              error instanceof Error ? error.message : "Balance payment verification failed",
+            );
+          });
+        },
+        key: config.keyId,
+        modal: {
+          ondismiss: () => {
+            setMessage("Balance payment was closed before completion.");
+          },
+        },
+        name: "The Vastra House",
+        order_id: result.gatewayOrder.id,
+        prefill: {
+          name: order?.shippingAddress.fullName,
+        },
+        theme: { color: "#8b1e2d" },
+      });
+
+      checkout.open();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not start balance payment");
+    } finally {
+      setIsPayingBalance(false);
+    }
+  }
 
   async function submitReturn(formData: FormData) {
     if (!order) {
@@ -148,6 +224,16 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
                         paymentSession.currencyCode,
                       )}
                     />
+                    {paymentSession.outstandingAmount > 0 && order.paymentMethod === "razorpay" ? (
+                      <button
+                        className="mt-3 h-10 w-full rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isPayingBalance}
+                        onClick={() => void payBalanceNow()}
+                        type="button"
+                      >
+                        {isPayingBalance ? "Starting payment..." : "Pay Balance Now"}
+                      </button>
+                    ) : null}
                   </>
                 ) : (
                   <InfoRow
