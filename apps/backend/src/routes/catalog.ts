@@ -192,6 +192,7 @@ type ProductIdPayload = { _id: unknown };
 catalogRouter.get("/products", listPublicProducts);
 catalogRouter.get("/home", getCatalogHome);
 catalogRouter.get("/filters", getCatalogFilters);
+catalogRouter.get("/search", searchCatalog);
 catalogRouter.get("/products/:slug/pdp", getProductPdp);
 catalogRouter.get("/products/:slug/reviews", listProductReviews);
 catalogRouter.post(
@@ -365,6 +366,76 @@ async function getCatalogFilters(_req: Request, res: Response, next: NextFunctio
         name: item.name,
         slug: item.slug,
       })),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function searchCatalog(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rawQuery = typeof req.query.q === "string" ? req.query.q.trim() : "";
+
+    if (rawQuery.length < 2) {
+      res.json({ results: [] });
+      return;
+    }
+
+    const regex = { $regex: escapeRegex(rawQuery), $options: "i" };
+    const activeFilter = { active: true, status: { $ne: "deleted" } };
+    const [products, categories, collections, tags] = await Promise.all([
+      Product.find({ ...activeFilter, name: regex })
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select("name slug media variants")
+        .lean(),
+      Category.find({ ...activeFilter, name: regex })
+        .sort({ name: 1 })
+        .limit(4)
+        .select("name slug banner")
+        .lean(),
+      Collection.find({ ...activeFilter, name: regex })
+        .sort({ name: 1 })
+        .limit(4)
+        .select("name slug banner")
+        .lean(),
+      Tag.find({ ...activeFilter, name: regex })
+        .sort({ name: 1 })
+        .limit(4)
+        .select("name slug")
+        .lean(),
+    ]);
+
+    res.json({
+      results: [
+        ...products.map((item) => ({
+          _id: String(item._id),
+          href: `/shop/${item.slug}`,
+          image: item.media?.[0] ?? item.variants?.[0]?.media?.[0],
+          kind: "Product",
+          title: item.name,
+        })),
+        ...categories.map((item) => ({
+          _id: String(item._id),
+          href: `/categories/${item.slug}`,
+          image: item.banner,
+          kind: "Category",
+          title: item.name,
+        })),
+        ...collections.map((item) => ({
+          _id: String(item._id),
+          href: `/collections/${item.slug}`,
+          image: item.banner,
+          kind: "Collection",
+          title: item.name,
+        })),
+        ...tags.map((item) => ({
+          _id: String(item._id),
+          href: `/shop?tagId=${String(item._id)}`,
+          kind: "Tag",
+          title: item.name,
+        })),
+      ],
     });
   } catch (error) {
     next(error);
@@ -915,4 +986,8 @@ function sortSizes(left: string, right: string) {
   }
 
   return left.localeCompare(right);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

@@ -8,6 +8,7 @@ import {
   Truck,
 } from "lucide-react";
 import { InstagramMarquee } from "@/components/home/InstagramMarquee";
+import { MobileHomeSearch } from "@/components/home/MobileHomeSearch";
 import { PreOrderAnnouncementModal } from "@/components/home/PreOrderAnnouncementModal";
 import { ResponsiveImage } from "@/components/media/ResponsiveImage";
 import {
@@ -76,6 +77,7 @@ export default async function HomePage() {
           </span>
           <span className="h-px w-6 bg-[#caa14e]/70" />
         </div>
+        <MobileHomeSearch />
         <Hero slides={heroSlides} />
         <SquareTileRail tiles={topTiles} />
         <StoryBand image={storyImage} imageAlt={storyImageAlt} />
