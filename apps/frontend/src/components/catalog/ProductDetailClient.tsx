@@ -24,7 +24,7 @@ export function ProductDetailClient({
   reviews,
 }: Readonly<{ pdp: PdpResponse; reviews: ProductReview[] }>) {
   const [selectedMedia, setSelectedMedia] = useState(0);
-  const [purchaseMode, setPurchaseMode] = useState<"regular" | "pre_order">("regular");
+  const [purchaseMode, setPurchaseMode] = useState<"pre_order">("pre_order");
   const [selectedVariant, setSelectedVariant] = useState(0);
   const product = pdp.product;
   const media = getProductMedia(product);
@@ -44,21 +44,15 @@ export function ProductDetailClient({
   );
 
   useEffect(() => {
-    if (typeof document !== "undefined" && document.referrer.includes("/pre-order")) {
+    if (canPreOrder) {
       setPurchaseMode("pre_order");
     }
-  }, []);
-
-  useEffect(() => {
-    if (!canPreOrder && purchaseMode === "pre_order") {
-      setPurchaseMode("regular");
-    }
-  }, [canPreOrder, purchaseMode]);
+  }, [canPreOrder]);
 
   return (
     <main className="bg-[#fbf7ef]">
-      <section className="mx-auto grid max-w-7xl gap-8 px-5 py-8 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)]">
-        <div>
+      <section className="mx-auto grid max-w-7xl gap-8 px-5 py-8 lg:grid-cols-[minmax(280px,0.72fr)_minmax(360px,1.28fr)]">
+        <div className="mx-auto w-full max-w-md lg:max-w-none">
           {media[selectedMedia]?.url ? (
             <div className="relative">
               <ProductMediaFrame
@@ -73,7 +67,7 @@ export function ProductDetailClient({
               <CornerFiligree className="pointer-events-none absolute bottom-2 left-2 -rotate-90 text-[#caa14e]/75" />
             </div>
           ) : (
-            <div className="grid aspect-square place-items-center rounded-sm bg-muted text-muted-foreground">
+            <div className="grid aspect-[9/16] place-items-center rounded-sm bg-muted text-muted-foreground">
               {product.name}
             </div>
           )}
@@ -152,28 +146,37 @@ export function ProductDetailClient({
 
             {canPreOrder ? (
               <div className="mt-6 rounded-md border border-[#e1d6c4] bg-white p-3">
-                <p className="text-sm font-semibold text-[#3d1620]">Choose purchase type</p>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <PurchaseModeButton
-                    active={purchaseMode === "regular"}
-                    label="Buy regular"
-                    onClick={() => setPurchaseMode("regular")}
-                  />
-                  <PurchaseModeButton
-                    active={purchaseMode === "pre_order"}
-                    label="Pre-order"
-                    onClick={() => setPurchaseMode("pre_order")}
-                  />
-                </div>
+                <p className="text-sm font-semibold text-[#3d1620]">Pre-order booking only</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  This storefront is currently accepting pre-order bookings only. Ready-stock
+                  checkout will be enabled later.
+                </p>
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-6 rounded-md border border-[#e1d6c4] bg-white p-3">
+                <p className="text-sm font-semibold text-[#3d1620]">Preview only</p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  This product is visible in the catalog, but booking is not open yet.
+                </p>
+              </div>
+            )}
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <AddToCartButton
-                productId={product._id}
-                purchaseMode={purchaseMode}
-                variantId={String(variant?._id)}
-              />
+              {canPreOrder ? (
+                <AddToCartButton
+                  productId={product._id}
+                  purchaseMode={purchaseMode}
+                  variantId={String(variant?._id)}
+                />
+              ) : (
+                <button
+                  className="inline-flex h-11 cursor-not-allowed items-center justify-center rounded-md border border-[#e1d6c4] px-5 text-sm font-semibold text-muted-foreground"
+                  disabled
+                  type="button"
+                >
+                  Pre-order unavailable
+                </button>
+              )}
               <ComparisonToggle product={storedProduct} />
               <WishlistButton productId={product._id} variantId={String(variant?._id)} />
             </div>
@@ -242,26 +245,6 @@ export function ProductDetailClient({
   );
 }
 
-function PurchaseModeButton({
-  active,
-  label,
-  onClick,
-}: Readonly<{ active: boolean; label: string; onClick: () => void }>) {
-  return (
-    <button
-      className={`h-10 rounded-md border px-3 text-sm font-semibold transition-colors ${
-        active
-          ? "border-[#6e1423] bg-[#6e1423] text-white shadow-[0_6px_16px_-8px_rgba(110,20,35,0.7)]"
-          : "border-[#e1d6c4] bg-white text-[#3d1620] hover:border-[#caa14e]"
-      }`}
-      onClick={onClick}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
 function PreOrderPanel({
   variant,
 }: Readonly<{
@@ -310,7 +293,7 @@ function ProductMediaFrame({
 }>) {
   if (media.type === "video") {
     return (
-      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-sm border border-[#e1d6c4] bg-black">
+      <div className="relative grid aspect-[9/16] place-items-center overflow-hidden rounded-sm border border-[#e1d6c4] bg-black">
         <video
           aria-label={alt}
           className="size-full object-cover"
@@ -332,7 +315,7 @@ function ProductMediaFrame({
   return (
     <ResponsiveImage
       alt={alt}
-      aspectRatio={media.aspectRatio ?? "1 / 1"}
+      aspectRatio="9 / 16"
       className="rounded-sm border border-[#e1d6c4]"
       objectFit={media.objectFit}
       priority={priority}

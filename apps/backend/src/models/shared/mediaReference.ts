@@ -1,6 +1,16 @@
 import { Schema, type Types } from "mongoose";
 
-export const aspectRatios = ["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3", "custom"] as const;
+export const aspectRatios = [
+  "1:1",
+  "4:5",
+  "9:16",
+  "16:7",
+  "16:9",
+  "21:9",
+  "3:2",
+  "2:3",
+  "custom",
+] as const;
 
 export type AspectRatio = (typeof aspectRatios)[number];
 

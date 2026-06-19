@@ -30,7 +30,13 @@ const contentTabs = [
 ] as const;
 
 type ContentTab = (typeof contentTabs)[number]["value"];
-type CmsList = "navigation" | "testimonials" | "faqs" | "policies" | "aboutValues";
+type CmsList =
+  | "navigation"
+  | "testimonials"
+  | "faqs"
+  | "policies"
+  | "aboutValues"
+  | "instagramPosts";
 
 export function AdminContentClient() {
   const accessToken = useAuthStore((state) => state.accessToken);
@@ -209,7 +215,7 @@ export function AdminContentClient() {
         ...current.home,
         hero: {
           ...current.home?.hero,
-          media: toMediaReference(item, content.home?.hero?.title ?? "Home hero image", "16:9"),
+          media: toMediaReference(item, content.home?.hero?.title ?? "Home hero image", "16:7"),
         },
       },
     }));
@@ -313,7 +319,7 @@ export function AdminContentClient() {
 
   function setHeroSlideMedia(index: number, item: MediaItem) {
     updateHeroSlide(index, {
-      media: toMediaReference(item, heroSlides()[index]?.title ?? "Home hero slide", "16:9"),
+      media: toMediaReference(item, heroSlides()[index]?.title ?? "Home hero slide", "16:7"),
     });
   }
 
@@ -329,7 +335,7 @@ export function AdminContentClient() {
     try {
       const formData = new FormData();
       formData.set("file", file);
-      formData.set("aspectRatio", "16:9");
+      formData.set("aspectRatio", "16:7");
       formData.set("context", "product-media");
       formData.set("objectFit", "cover");
       formData.set("altText", content.home?.hero?.title || "The Vastra House hero image");
@@ -390,6 +396,19 @@ export function AdminContentClient() {
       return;
     }
 
+    if (list === "instagramPosts") {
+      updateContent((current) => ({
+        ...current,
+        footer: {
+          ...current.footer,
+          instagramPosts: (current.footer?.instagramPosts ?? []).filter(
+            (_, itemIndex) => itemIndex !== index,
+          ),
+        },
+      }));
+      return;
+    }
+
     updateContent((current) => ({
       ...current,
       [list]: (current[list] ?? []).filter((_, itemIndex) => itemIndex !== index),
@@ -400,6 +419,38 @@ export function AdminContentClient() {
     updateContent((current) => ({
       ...current,
       footer: { ...current.footer, tagline: value },
+    }));
+  }
+
+  function updateFooterField(
+    field: "email" | "instagramUrl" | "location" | "phone" | "whatsappUrl",
+    value: string,
+  ) {
+    updateContent((current) => ({
+      ...current,
+      footer: { ...current.footer, [field]: value },
+    }));
+  }
+
+  function updateInstagramPost(index: number, value: string) {
+    updateContent((current) => ({
+      ...current,
+      footer: {
+        ...current.footer,
+        instagramPosts: (current.footer?.instagramPosts ?? []).map((item, itemIndex) =>
+          itemIndex === index ? value : item,
+        ),
+      },
+    }));
+  }
+
+  function addInstagramPost() {
+    updateContent((current) => ({
+      ...current,
+      footer: {
+        ...current.footer,
+        instagramPosts: [...(current.footer?.instagramPosts ?? []), ""],
+      },
     }));
   }
 
@@ -695,26 +746,26 @@ export function AdminContentClient() {
               <aside className="rounded-lg border border-border bg-card p-5 shadow-soft">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <ImagePlus aria-hidden="true" size={16} />
-                  Hero Image
+                  Hero Media
                 </div>
                 {heroMedia?.url ? (
                   <ResponsiveImage
                     alt={heroMedia.altText ?? "Home hero image"}
-                    aspectRatio={heroMedia.aspectRatio ?? "16 / 9"}
+                    aspectRatio={heroMedia.aspectRatio?.replace(":", " / ") ?? "16 / 7"}
                     className="mt-3 rounded-md border border-border"
                     objectFit={heroMedia.objectFit}
                     src={heroMedia.url}
                   />
                 ) : (
                   <p className="mt-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
-                    No hero image selected.
+                    No hero media selected.
                   </p>
                 )}
                 <div className="mt-4 grid gap-2">
                   <label className="text-xs font-medium">
-                    Upload new hero image
+                    Upload new hero image or video
                     <input
-                      accept="image/*"
+                      accept="image/*,video/*"
                       className="mt-1 block w-full rounded-md border border-border p-1.5 text-sm"
                       ref={heroUploadRef}
                       type="file"
@@ -727,12 +778,12 @@ export function AdminContentClient() {
                     type="button"
                   >
                     <Upload aria-hidden="true" size={15} />
-                    {uploadingHero ? "Uploading..." : "Upload Hero"}
+                    {uploadingHero ? "Uploading..." : "Upload Hero Media"}
                   </button>
                 </div>
                 <div className="mt-4">
                   <p className="mb-2 text-xs font-semibold">Pick from media library</p>
-                  <MediaPicker media={imageMedia} onSelect={setHeroMedia} />
+                  <MediaPicker media={media} onSelect={setHeroMedia} />
                 </div>
               </aside>
             </section>
@@ -898,6 +949,60 @@ export function AdminContentClient() {
                 onChange={updateFooterTagline}
                 value={content.footer?.tagline ?? ""}
               />
+              <div className="mt-4 grid gap-3 rounded-md border border-border p-3 md:grid-cols-2">
+                <Field
+                  label="Customer email"
+                  onChange={(value) => updateFooterField("email", value)}
+                  value={content.footer?.email ?? ""}
+                />
+                <Field
+                  label="Phone number"
+                  onChange={(value) => updateFooterField("phone", value)}
+                  value={content.footer?.phone ?? ""}
+                />
+                <Field
+                  label="Location"
+                  onChange={(value) => updateFooterField("location", value)}
+                  value={content.footer?.location ?? ""}
+                />
+                <Field
+                  label="Instagram profile URL"
+                  onChange={(value) => updateFooterField("instagramUrl", value)}
+                  value={content.footer?.instagramUrl ?? ""}
+                />
+                <Field
+                  label="WhatsApp URL"
+                  onChange={(value) => updateFooterField("whatsappUrl", value)}
+                  value={content.footer?.whatsappUrl ?? ""}
+                />
+              </div>
+              <div className="mt-4 rounded-md border border-border p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Instagram Post URLs</p>
+                  <button
+                    className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-xs font-semibold"
+                    onClick={addInstagramPost}
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" size={13} />
+                    Add Post
+                  </button>
+                </div>
+                <div className="grid gap-3">
+                  {(content.footer?.instagramPosts ?? []).map((url, index) => (
+                    <CardRow
+                      key={`${url}-${index}`}
+                      onRemove={() => removeFromList("instagramPosts", index)}
+                    >
+                      <Field
+                        label={`Instagram post ${index + 1}`}
+                        onChange={(value) => updateInstagramPost(index, value)}
+                        value={url}
+                      />
+                    </CardRow>
+                  ))}
+                </div>
+              </div>
               <div className="mt-4 grid gap-3">
                 {(content.footer?.links ?? []).map((link, index) => (
                   <LinkRow
@@ -1164,38 +1269,127 @@ function toMediaReference(
   };
 }
 
-function normalizeContent(content: CmsContent): CmsContent {
+function cleanLink(link?: CmsLink): CmsLink | undefined {
+  if (!link) {
+    return undefined;
+  }
+
   return {
-    ...defaultCmsContent,
-    ...content,
+    enabled: link.enabled !== false,
+    href: link.href ?? "",
+    label: link.label ?? "",
+  };
+}
+
+function cleanMediaReference(mediaReference?: MediaReference): MediaReference | undefined {
+  if (!mediaReference?.url) {
+    return undefined;
+  }
+
+  return {
+    altText: mediaReference.altText,
+    aspectRatio: mediaReference.aspectRatio,
+    mediaId: mediaReference.mediaId,
+    objectFit: mediaReference.objectFit,
+    type: mediaReference.type,
+    url: mediaReference.url,
+  };
+}
+
+function cleanHeroSlide(slide: CmsHeroSlide): CmsHeroSlide {
+  return {
+    copy: slide.copy,
+    eyebrow: slide.eyebrow,
+    fontFamily: slide.fontFamily ?? "serif",
+    fontSize: slide.fontSize ?? "lg",
+    media: cleanMediaReference(slide.media),
+    primaryCta: cleanLink(slide.primaryCta),
+    secondaryCta: cleanLink(slide.secondaryCta),
+    textColor: slide.textColor ?? "#ffffff",
+    title: slide.title,
+  };
+}
+
+function isPresent<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+function normalizeContent(content: CmsContent): CmsContent {
+  const homeHero = {
+    ...defaultCmsContent.home?.hero,
+    ...content.home?.hero,
+  };
+  const aboutPrimaryCta = {
+    enabled: true,
+    href: "/shop",
+    label: "Explore Shop",
+    ...defaultCmsContent.about?.primaryCta,
+    ...content.about?.primaryCta,
+  };
+
+  return {
+    title: content.title ?? defaultCmsContent.title,
+    status: content.status ?? defaultCmsContent.status,
     footer: {
-      ...defaultCmsContent.footer,
-      ...content.footer,
-      links: content.footer?.links ?? defaultCmsContent.footer?.links ?? [],
+      brandLogo: cleanMediaReference(
+        content.footer?.brandLogo ?? defaultCmsContent.footer?.brandLogo,
+      ),
+      email: content.footer?.email ?? defaultCmsContent.footer?.email,
+      instagramPosts: (
+        content.footer?.instagramPosts ??
+        defaultCmsContent.footer?.instagramPosts ??
+        []
+      ).filter(Boolean),
+      instagramUrl: content.footer?.instagramUrl ?? defaultCmsContent.footer?.instagramUrl,
+      links: (content.footer?.links ?? defaultCmsContent.footer?.links ?? [])
+        .map((link) => cleanLink(link))
+        .filter(isPresent),
+      location: content.footer?.location ?? defaultCmsContent.footer?.location,
+      phone: content.footer?.phone ?? defaultCmsContent.footer?.phone,
+      tagline: content.footer?.tagline ?? defaultCmsContent.footer?.tagline,
+      whatsappUrl: content.footer?.whatsappUrl ?? defaultCmsContent.footer?.whatsappUrl,
     },
     home: {
-      ...defaultCmsContent.home,
-      ...content.home,
+      announcement: content.home?.announcement ?? defaultCmsContent.home?.announcement,
       hero: {
-        ...defaultCmsContent.home?.hero,
-        ...content.home?.hero,
+        copy: homeHero.copy,
+        eyebrow: homeHero.eyebrow,
+        media: cleanMediaReference(homeHero.media),
+        primaryCta: cleanLink(homeHero.primaryCta),
+        secondaryCta: cleanLink(homeHero.secondaryCta),
+        slides: (homeHero.slides ?? []).map((slide) => cleanHeroSlide(slide)),
+        title: homeHero.title,
       },
     },
     about: {
-      ...defaultCmsContent.about,
-      ...content.about,
-      primaryCta: {
-        enabled: true,
-        href: "/shop",
-        label: "Explore Shop",
-        ...defaultCmsContent.about?.primaryCta,
-        ...content.about?.primaryCta,
-      },
-      values: content.about?.values ?? defaultCmsContent.about?.values ?? [],
+      description: content.about?.description ?? defaultCmsContent.about?.description,
+      eyebrow: content.about?.eyebrow ?? defaultCmsContent.about?.eyebrow,
+      media: cleanMediaReference(content.about?.media ?? defaultCmsContent.about?.media),
+      primaryCta: cleanLink(aboutPrimaryCta),
+      storyCopy: content.about?.storyCopy ?? defaultCmsContent.about?.storyCopy,
+      storyEyebrow: content.about?.storyEyebrow ?? defaultCmsContent.about?.storyEyebrow,
+      storyTitle: content.about?.storyTitle ?? defaultCmsContent.about?.storyTitle,
+      title: content.about?.title ?? defaultCmsContent.about?.title,
+      values: (content.about?.values ?? defaultCmsContent.about?.values ?? []).map((item) => ({
+        icon: item.icon ?? "sparkles",
+        text: item.text,
+        title: item.title,
+      })),
     },
-    navigation: content.navigation ?? [],
-    faqs: content.faqs ?? [],
-    policies: content.policies ?? [],
-    testimonials: content.testimonials ?? [],
+    navigation: (content.navigation ?? []).map((link) => cleanLink(link)).filter(isPresent),
+    faqs: (content.faqs ?? []).map((item) => ({
+      answer: item.answer,
+      question: item.question,
+    })),
+    policies: (content.policies ?? []).map((item) => ({
+      body: item.body,
+      slug: item.slug,
+      title: item.title,
+    })),
+    testimonials: (content.testimonials ?? []).map((item) => ({
+      location: item.location,
+      name: item.name,
+      quote: item.quote,
+    })),
   };
 }

@@ -45,7 +45,7 @@ export function Header({ cms }: Readonly<{ cms?: CmsContent }>) {
   }, [accessToken, setCart]);
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[#e5dac7] bg-[#fffaf1]/96 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-[#e5dac7] bg-[#fffaf1]/96 backdrop-blur">
       <div className="bg-[#3a250f] text-[#fff7e8]">
         <div className="mx-auto flex h-8 max-w-7xl items-center justify-between px-5 text-[11px] font-semibold uppercase tracking-wide">
           <span>Free shipping on orders above Rs. 1999</span>

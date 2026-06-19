@@ -18,7 +18,9 @@ export function ProductGrid({
   return (
     <div
       className={
-        view === "grid" ? "grid gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-4" : "grid gap-4"
+        view === "grid"
+          ? "grid gap-x-5 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+          : "grid gap-4"
       }
     >
       {products.map((product) => (

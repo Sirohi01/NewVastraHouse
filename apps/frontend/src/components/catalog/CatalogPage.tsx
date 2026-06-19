@@ -82,6 +82,15 @@ export async function CatalogPage({
         </section>
 
         <section className="mx-auto max-w-7xl px-5 pb-10">
+          <div className="mb-4 rounded-sm border border-[#caa14e]/50 bg-[#fffaf1] p-4 text-sm leading-6 text-[#6f6256]">
+            <p className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">
+              Pre-orders only right now
+            </p>
+            <p className="mt-1">
+              You can browse all products, but checkout is currently enabled only for products with
+              active pre-order slots.
+            </p>
+          </div>
           <div className="overflow-hidden rounded-sm border border-[#e1d6c4] bg-[#fffdf8] shadow-[0_18px_50px_-40px_rgba(46,12,18,0.5)]">
             <div className="grid min-h-14 items-center border-b border-[#e1d6c4] text-sm md:grid-cols-[260px_1fr]">
               <div className="flex items-center gap-2 border-[#e1d6c4] px-5 py-4 md:border-r">

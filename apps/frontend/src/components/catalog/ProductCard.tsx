@@ -19,6 +19,10 @@ export function ProductCard({
   const media = getProductMedia(product)[0];
   const price = getProductPrice(product);
   const pricing = getProductPricing(product);
+  const sizes = [...new Set(product.variants.map((variant) => variant.size).filter(isString))];
+  const hasPreOrder = product.variants.some(
+    (variant) => variant.preOrder?.enabled && (variant.preOrder.remainingQuantity ?? 0) > 0,
+  );
   const storedProduct = {
     imageUrl: media?.url,
     name: product.name,
@@ -39,14 +43,14 @@ export function ProductCard({
         {media?.url ? (
           <ResponsiveImage
             alt={media.altText ?? product.name}
-            aspectRatio="1 / 1"
+            aspectRatio="9 / 16"
             className="transition-transform duration-500 group-hover:scale-105"
             objectFit={media.objectFit ?? "cover"}
             sizes={view === "list" ? "180px" : "(max-width: 768px) 50vw, 25vw"}
             src={media.url}
           />
         ) : (
-          <div className="grid aspect-square place-items-center bg-muted text-sm font-semibold text-muted-foreground">
+          <div className="grid aspect-[9/16] place-items-center bg-muted text-sm font-semibold text-muted-foreground">
             {product.name}
           </div>
         )}
@@ -75,6 +79,26 @@ export function ProductCard({
               {formatBadge(badge)}
             </span>
           ))}
+        <span className="absolute left-3 bottom-3 rounded-sm border border-[#f0d9a4]/50 bg-[#fffaf1]/95 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#6e1423]">
+          {hasPreOrder ? "Pre-order available" : "Preview only"}
+        </span>
+        {sizes.length ? (
+          <div className="absolute inset-x-3 bottom-12 translate-y-2 rounded-sm border border-[#caa14e]/50 bg-white/95 px-2 py-2 opacity-0 shadow-soft transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9b6d35]">
+              Sizes
+            </p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {sizes.map((size) => (
+                <span
+                  className="grid min-w-7 place-items-center rounded-sm border border-[#e1d6c4] px-1.5 py-0.5 text-[11px] font-semibold text-[#3d1620]"
+                  key={size}
+                >
+                  {size}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Link>
       <div className="flex min-w-0 flex-col pt-2.5 sm:pt-0">
         <Link
@@ -116,6 +140,10 @@ export function ProductCard({
       </div>
     </article>
   );
+}
+
+function isString(value: string | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 function formatBadge(value: string) {

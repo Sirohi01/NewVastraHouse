@@ -1,4 +1,14 @@
-import { ArrowRight, Award, PackageCheck, RotateCcw, ShieldCheck, Truck } from "lucide-react";
+import {
+  ArrowRight,
+  Award,
+  Instagram,
+  PackageCheck,
+  RotateCcw,
+  ShieldCheck,
+  Truck,
+} from "lucide-react";
+import { InstagramMarquee } from "@/components/home/InstagramMarquee";
+import { PreOrderAnnouncementModal } from "@/components/home/PreOrderAnnouncementModal";
 import { ResponsiveImage } from "@/components/media/ResponsiveImage";
 import {
   getCatalogHome,
@@ -24,6 +34,7 @@ type VisualTile = {
   title: string;
   subtitle?: string;
   href: string;
+  sizes?: string[];
   media: {
     alt: string;
     aspectRatio: string;
@@ -44,9 +55,11 @@ export default async function HomePage() {
   const heroSlides = normalizeHeroSlides(cms?.home?.hero?.slides, cms?.home?.hero, heroImage);
   const storyImage = productTiles[1]?.media.src ?? collectionTiles[1]?.media.src ?? heroImage;
   const socialTiles = [...productTiles, ...categoryTiles, ...collectionTiles].slice(0, 7);
+  const instagramPosts = cms?.footer?.instagramPosts?.filter(Boolean) ?? [];
 
   return (
     <div className="relative bg-[#fbf7ef] text-[#211f1c]">
+      <PreOrderAnnouncementModal />
       <DamaskBackdrop />
       <div className="relative">
         <div className="h-[3px] bg-[linear-gradient(90deg,#6e1423,#caa14e,#6e1423)]" />
@@ -63,7 +76,7 @@ export default async function HomePage() {
         <CollectionGrid tiles={collectionTiles.length ? collectionTiles : categoryTiles} />
         <ProductGrid products={productTiles} />
         <TrustStrip />
-        <SocialGrid tiles={socialTiles} />
+        <SocialGrid instagramPosts={instagramPosts} tiles={socialTiles} />
       </div>
       <style>{`
         @keyframes heroFade {
@@ -74,6 +87,10 @@ export default async function HomePage() {
         @keyframes royalRise {
           from { opacity: 0; transform: translateY(14px); }
           to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes instaMarquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
         }
         @media (prefers-reduced-motion: reduce) {
           [style*="heroFade"], .royal-rise { animation: none !important; opacity: 1 !important; }
@@ -115,7 +132,8 @@ async function loadHomeData(): Promise<HomeData> {
   }
 }
 
-const HERO_ASPECT_RATIO = "16 / 5";
+const HERO_ASPECT_RATIO = "16 / 7";
+const TALL_TILE_ASPECT_RATIO = "9 / 16";
 
 function Hero({ slides }: Readonly<{ slides: CmsHeroSlide[] }>) {
   return (
@@ -164,7 +182,7 @@ function Hero({ slides }: Readonly<{ slides: CmsHeroSlide[] }>) {
           <CornerFiligree className="absolute -bottom-px -left-px -rotate-90 text-[#caa14e]/80" />
         </div>
 
-        <div className="absolute inset-0 flex items-center">
+        <div className="absolute inset-0 hidden items-center md:flex">
           <div className="mx-auto w-full max-w-7xl px-8 sm:px-12">
             <div
               className={`royal-rise max-w-xl ${slides[0]?.fontFamily === "sans" ? "" : "font-serif"}`}
@@ -223,33 +241,49 @@ function SquareTileRail({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto grid max-w-7xl grid-cols-2 gap-3 border-b border-[#e1d6c4] px-5 py-5 sm:grid-cols-3 lg:grid-cols-5">
-      {tiles.map((tile) => (
-        <a
-          className="group relative overflow-hidden rounded-sm border border-[#e1d6c4] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_14px_30px_-18px_rgba(110,20,35,0.55)]"
-          href={tile.href}
-          key={tile.href}
-        >
-          <div className="overflow-hidden">
-            <ResponsiveImage
-              alt={tile.media.alt}
-              aspectRatio="1 / 1"
-              className="transition-transform duration-500 group-hover:scale-105"
-              sizes="(max-width: 1024px) 50vw, 20vw"
-              src={tile.media.src}
-            />
-            <span className="pointer-events-none absolute inset-2 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/60" />
+    <section className="border-b border-[#e1d6c4] px-5 py-7">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-5 flex flex-col gap-2 text-center sm:mb-6">
+          <FiligreeDivider align="center" />
+          <h2 className="font-serif text-2xl uppercase tracking-[0.08em] text-[#3d1620] sm:text-[28px]">
+            Shop The Edit
+          </h2>
+          <p className="mx-auto max-w-2xl text-sm leading-6 text-muted-foreground">
+            Curated categories, collections, and pre-order favourites for a refined wardrobe.
+          </p>
+        </div>
+
+        <div className="-mx-5 overflow-x-auto px-5 pb-1">
+          <div className="grid min-w-max grid-cols-5 gap-3 lg:min-w-0">
+            {tiles.map((tile) => (
+              <a
+                className="group relative w-44 overflow-hidden rounded-sm border border-[#e1d6c4] bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_14px_30px_-18px_rgba(110,20,35,0.55)] sm:w-52 lg:w-auto"
+                href={tile.href}
+                key={tile.href}
+              >
+                <div className="overflow-hidden">
+                  <ResponsiveImage
+                    alt={tile.media.alt}
+                    aspectRatio={TALL_TILE_ASPECT_RATIO}
+                    className="transition-transform duration-500 group-hover:scale-105"
+                    sizes="208px"
+                    src={tile.media.src}
+                  />
+                  <span className="pointer-events-none absolute inset-2 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/60" />
+                </div>
+                <div className="border-t border-[#e1d6c4] px-3 py-3 text-center">
+                  <h2 className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">
+                    {tile.title}
+                  </h2>
+                  <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#9b6d35] transition-transform duration-200 group-hover:translate-x-0.5">
+                    Shop Now <ArrowRight aria-hidden="true" size={14} />
+                  </span>
+                </div>
+              </a>
+            ))}
           </div>
-          <div className="border-t border-[#e1d6c4] px-3 py-3 text-center">
-            <h2 className="font-serif text-lg uppercase tracking-wide text-[#3d1620]">
-              {tile.title}
-            </h2>
-            <span className="mt-2 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[#9b6d35] transition-transform duration-200 group-hover:translate-x-0.5">
-              Shop Now <ArrowRight aria-hidden="true" size={14} />
-            </span>
-          </div>
-        </a>
-      ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -301,19 +335,19 @@ function CollectionGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   }
 
   return (
-    <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-8 pt-6">
+    <section className="relative z-0 isolate mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-6 pt-5">
       <SectionTitle title="Our Collections" />
-      <div className="mt-1 grid gap-4 md:grid-cols-3">
+      <div className="mt-4 grid gap-4 md:grid-cols-3">
         {tiles.slice(0, 3).map((tile) => (
           <a
             className="group relative block overflow-hidden rounded-sm"
             href={tile.href}
             key={tile.href}
           >
-            <div className="relative overflow-hidden" style={{ aspectRatio: "4 / 5" }}>
+            <div className="relative aspect-[4/5] max-h-[430px] overflow-hidden md:aspect-[5/6]">
               <ResponsiveImage
                 alt={tile.media.alt}
-                aspectRatio="4 / 5"
+                aspectRatio="5 / 6"
                 className="z-0 transition-transform duration-500 group-hover:scale-105"
                 sizes="(max-width: 768px) 100vw, 33vw"
                 src={tile.media.src}
@@ -345,50 +379,71 @@ function ProductGrid({ products }: Readonly<{ products: VisualTile[] }>) {
   return (
     <section className="mx-auto max-w-7xl border-b border-[#e1d6c4] px-5 pb-8 pt-6">
       <SectionTitle title="New Arrivals" />
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {products.slice(0, 8).map((product) => (
-          <a
-            className="group relative rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_16px_34px_-20px_rgba(110,20,35,0.6)]"
-            href={product.href}
-            key={product.href}
-          >
-            <div className="relative overflow-hidden">
-              <ResponsiveImage
-                alt={product.media.alt}
-                aspectRatio="1 / 1"
-                className="transition-transform duration-500 group-hover:scale-105"
-                sizes="(max-width: 640px) 100vw, 25vw"
-                src={product.media.src}
-              />
-              <span className="pointer-events-none absolute inset-1.5 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/55" />
-              {product.pricing?.hasSale ? (
-                <span className="absolute left-2 top-2 rounded-sm border border-[#f0d9a4]/50 bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
-                  Sale
-                </span>
-              ) : null}
-            </div>
-            <div className="pt-3">
-              <h3 className="font-serif text-[15px] font-medium text-[#3d1620]">{product.title}</h3>
-              {product.subtitle ? (
-                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
-                  <span className="font-semibold text-[#3d2a18]">
-                    {product.pricing?.price ?? product.subtitle}
+      <div className="mt-6 overflow-hidden">
+        <div className="flex w-max animate-[instaMarquee_34s_linear_infinite] gap-4 hover:[animation-play-state:paused]">
+          {[...products.slice(0, 8), ...products.slice(0, 8)].map((product, index) => (
+            <a
+              className="group relative w-60 shrink-0 rounded-sm border border-[#e1d6c4] bg-white p-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-[#caa14e] hover:shadow-[0_16px_34px_-20px_rgba(110,20,35,0.6)] sm:w-72"
+              href={product.href}
+              key={`${product.href}-${index}`}
+            >
+              <div className="relative overflow-hidden">
+                <ResponsiveImage
+                  alt={product.media.alt}
+                  aspectRatio={TALL_TILE_ASPECT_RATIO}
+                  className="transition-transform duration-500 group-hover:scale-105"
+                  sizes="(max-width: 640px) 100vw, 25vw"
+                  src={product.media.src}
+                />
+                <span className="pointer-events-none absolute inset-1.5 border border-white/0 transition-colors duration-200 group-hover:border-[#caa14e]/55" />
+                {product.pricing?.hasSale ? (
+                  <span className="absolute left-2 top-2 rounded-sm border border-[#f0d9a4]/50 bg-[#6e1423] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white">
+                    Sale
                   </span>
-                  {product.pricing?.hasSale ? (
-                    <>
-                      <span className="text-muted-foreground line-through">
-                        {product.pricing.original}
-                      </span>
-                      <span className="text-xs font-semibold uppercase text-[#6e1423]">
-                        {product.pricing.discountPercent}% Off
-                      </span>
-                    </>
-                  ) : null}
-                </p>
-              ) : null}
-            </div>
-          </a>
-        ))}
+                ) : null}
+                {product.sizes?.length ? (
+                  <div className="absolute inset-x-2 bottom-2 translate-y-2 rounded-sm border border-[#caa14e]/50 bg-white/95 px-2 py-2 opacity-0 shadow-soft transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9b6d35]">
+                      Sizes
+                    </p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {product.sizes.map((size) => (
+                        <span
+                          className="grid min-w-7 place-items-center rounded-sm border border-[#e1d6c4] px-1.5 py-0.5 text-[11px] font-semibold text-[#3d1620]"
+                          key={size}
+                        >
+                          {size}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="pt-3">
+                <h3 className="font-serif text-[15px] font-medium text-[#3d1620]">
+                  {product.title}
+                </h3>
+                {product.subtitle ? (
+                  <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-semibold text-[#3d2a18]">
+                      {product.pricing?.price ?? product.subtitle}
+                    </span>
+                    {product.pricing?.hasSale ? (
+                      <>
+                        <span className="text-muted-foreground line-through">
+                          {product.pricing.original}
+                        </span>
+                        <span className="text-xs font-semibold uppercase text-[#6e1423]">
+                          {product.pricing.discountPercent}% Off
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+              </div>
+            </a>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -429,10 +484,15 @@ function TrustStrip() {
   );
 }
 
-function SocialGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
-  if (!tiles.length) {
+function SocialGrid({
+  instagramPosts,
+  tiles,
+}: Readonly<{ instagramPosts: string[]; tiles: VisualTile[] }>) {
+  if (!tiles.length && !instagramPosts.length) {
     return null;
   }
+
+  const tileItems = [...tiles, ...tiles];
 
   return (
     <section className="mx-auto max-w-7xl px-5 pb-10 pt-6">
@@ -443,23 +503,32 @@ function SocialGrid({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
         </h2>
         <span className="h-px w-8 bg-[#caa14e]/70" />
       </div>
-      <div className="mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
-        {tiles.map((tile) => (
-          <div
-            className="group relative overflow-hidden rounded-sm border border-[#e1d6c4]"
-            key={tile.href}
-          >
-            <ResponsiveImage
-              alt={tile.media.alt}
-              aspectRatio="1 / 1"
-              className="transition-transform duration-500 group-hover:scale-110"
-              sizes="(max-width: 640px) 50vw, 14vw"
-              src={tile.media.src}
-            />
-            <span className="pointer-events-none absolute inset-0 bg-[#2e0c12]/0 transition-colors duration-200 group-hover:bg-[#2e0c12]/15" />
+      {instagramPosts.length ? (
+        <InstagramMarquee posts={instagramPosts} />
+      ) : (
+        <div className="mt-5 overflow-hidden">
+          <div className="flex w-max animate-[instaMarquee_28s_linear_infinite] gap-3 hover:[animation-play-state:paused]">
+            {tileItems.map((tile, index) => (
+              <a
+                className="group relative block w-36 shrink-0 overflow-hidden rounded-sm border border-[#e1d6c4] bg-white sm:w-40"
+                href={tile.href}
+                key={`${tile.href}-${index}`}
+              >
+                <ResponsiveImage
+                  alt={tile.media.alt}
+                  aspectRatio={TALL_TILE_ASPECT_RATIO}
+                  className="transition-transform duration-500 group-hover:scale-110"
+                  sizes="160px"
+                  src={tile.media.src}
+                />
+                <span className="absolute inset-0 grid place-items-center bg-[#2e0c12]/0 text-white transition-colors duration-200 group-hover:bg-[#2e0c12]/35">
+                  <Instagram aria-hidden="true" className="opacity-0 group-hover:opacity-100" />
+                </span>
+              </a>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -582,7 +651,7 @@ function normalizeHeroSlides(
         fontSize: "lg",
         media: {
           altText: "The Vastra House heritage inspired fashion hero banner",
-          aspectRatio: "16:9",
+          aspectRatio: "16:7",
           type: "image",
           url: fallbackImage,
         },
@@ -599,7 +668,7 @@ function normalizeHeroSlides(
     fontSize: slide.fontSize ?? "lg",
     media: slide.media ?? {
       altText: slide.title ?? "The Vastra House hero banner",
-      aspectRatio: "16:9",
+      aspectRatio: "16:7",
       type: "image",
       url: fallbackImage,
     },
@@ -627,6 +696,7 @@ function toProductTiles(products: CatalogProduct[]): VisualTile[] {
       href: `/shop/${product.slug}`,
       media: normalizeMedia(media, product.name),
       pricing: getProductPricing(product),
+      sizes: [...new Set(product.variants.map((variant) => variant.size).filter(isString))],
       subtitle: getProductPrice(product),
       title: product.name,
     };
@@ -648,7 +718,11 @@ function toTaxonomyTiles(
 function normalizeMedia(media: MediaReference | undefined, fallbackAlt: string) {
   return {
     alt: media?.altText || fallbackAlt,
-    aspectRatio: "1 / 1",
+    aspectRatio: TALL_TILE_ASPECT_RATIO,
     src: media?.url || fallbackHero,
   };
+}
+
+function isString(value: string | undefined): value is string {
+  return typeof value === "string" && value.length > 0;
 }

@@ -66,7 +66,13 @@ const cmsContentSchema = new Schema(
     navigation: [linkSchema],
     footer: {
       brandLogo: mediaReferenceSchema,
+      email: { type: String, trim: true },
+      instagramPosts: [{ type: String, trim: true }],
+      instagramUrl: { type: String, trim: true },
       tagline: { type: String, trim: true },
+      location: { type: String, trim: true },
+      phone: { type: String, trim: true },
+      whatsappUrl: { type: String, trim: true },
       links: [linkSchema],
     },
     testimonials: [

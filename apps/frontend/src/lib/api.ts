@@ -20,6 +20,7 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { accessToken, headers, ...rest } = options;
   const response = await fetch(`${apiBaseUrl}${path}`, {
+    cache: "no-store",
     ...rest,
     headers: {
       "Content-Type": "application/json",

@@ -36,6 +36,10 @@ const footerLinks = [
 export function Footer({ cms }: Readonly<{ cms?: CmsContent }>) {
   const content = cms ?? defaultCmsContent;
   const logo = content.footer?.brandLogo;
+  const email = content.footer?.email || "hello@thevastrahouse.com";
+  const phone = content.footer?.phone || "+91 00000 00000";
+  const location = content.footer?.location || "India";
+  const instagramUrl = content.footer?.instagramUrl || "/";
 
   return (
     <footer className="border-t border-[#e5dac7] bg-[#fffaf1]">
@@ -62,14 +66,14 @@ export function Footer({ cms }: Readonly<{ cms?: CmsContent }>) {
               "Thoughtfully made Indian wear with polished details, comfortable fabrics, and occasion-ready styling."}
           </p>
           <div className="mt-5 flex flex-wrap gap-3 text-sm text-[#6f6256]">
-            <ContactLink href="mailto:hello@thevastrahouse.com" icon={<Mail size={16} />}>
-              hello@thevastrahouse.com
+            <ContactLink href={`mailto:${email}`} icon={<Mail size={16} />}>
+              {email}
             </ContactLink>
-            <ContactLink href="tel:+910000000000" icon={<Phone size={16} />}>
-              +91 00000 00000
+            <ContactLink href={`tel:${phone.replace(/\s+/g, "")}`} icon={<Phone size={16} />}>
+              {phone}
             </ContactLink>
             <ContactLink href="/track-order" icon={<MapPin size={16} />}>
-              India
+              {location}
             </ContactLink>
           </div>
         </div>
@@ -95,7 +99,12 @@ export function Footer({ cms }: Readonly<{ cms?: CmsContent }>) {
       <div className="border-t border-[#e5dac7]">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-5 text-xs text-[#6f6256] sm:flex-row sm:items-center sm:justify-between">
           <span>(c) 2026 The Vastra House</span>
-          <a className="inline-flex items-center gap-2 transition hover:text-primary" href="/">
+          <a
+            className="inline-flex items-center gap-2 transition hover:text-primary"
+            href={instagramUrl}
+            rel="noreferrer"
+            target={instagramUrl.startsWith("http") ? "_blank" : undefined}
+          >
             <Instagram aria-hidden="true" size={15} />
             Instagram
           </a>

@@ -158,9 +158,14 @@ export function CartClient() {
                           item.purchaseMode ?? (item.preOrder?.enabled ? "pre_order" : "regular")
                         }
                       >
-                        <option value="regular">Regular order</option>
+                        <option disabled value="regular">
+                          Regular order disabled
+                        </option>
                         <option value="pre_order">Pre-order</option>
                       </select>
+                      <span className="mt-1 block text-[11px] font-medium normal-case tracking-normal text-muted-foreground">
+                        Current storefront checkout is open for pre-orders only.
+                      </span>
                     </label>
                   ) : null}
                 </div>

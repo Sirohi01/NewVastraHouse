@@ -938,7 +938,7 @@ export default function AdminProductsPage() {
                       onChange={(event) => setUploadAspectRatio(event.target.value)}
                       value={uploadAspectRatio}
                     >
-                      {["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3"].map((ratio) => (
+                      {["1:1", "4:5", "9:16", "16:7", "16:9", "21:9", "3:2", "2:3"].map((ratio) => (
                         <option key={ratio} value={ratio}>
                           {ratio}
                         </option>

@@ -10,7 +10,7 @@ import { errorMessage, useToast } from "@/components/ui/Toast";
 import { apiBaseUrl, apiFetch } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
 
-const aspectRatios = ["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3", "custom"];
+const aspectRatios = ["1:1", "4:5", "9:16", "16:7", "16:9", "21:9", "3:2", "2:3", "custom"];
 
 export default function AdminMediaPage() {
   const toast = useToast();

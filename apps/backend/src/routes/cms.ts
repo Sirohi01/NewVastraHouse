@@ -15,7 +15,7 @@ const mediaReferenceSchema = z
     url: z.string().min(1).refine(isMediaUrl, "Media URL must be absolute or site-relative"),
     altText: z.string().min(3).max(160),
     type: z.enum(["image", "video", "pdf", "lookbook"]),
-    aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:9", "21:9", "3:2", "2:3", "custom"]),
+    aspectRatio: z.enum(["1:1", "4:5", "9:16", "16:7", "16:9", "21:9", "3:2", "2:3", "custom"]),
     objectFit: z.enum(["cover", "contain"]).optional(),
   })
   .strict();
@@ -94,8 +94,14 @@ const cmsSchema = z
     footer: z
       .object({
         brandLogo: mediaReferenceSchema.optional(),
+        email: z.string().email().or(z.literal("")).optional(),
+        instagramPosts: z.array(z.string().url()).max(20).default([]),
+        instagramUrl: z.string().url().or(z.literal("")).optional(),
         links: z.array(linkSchema).max(20).default([]),
+        location: z.string().max(160).optional(),
+        phone: z.string().max(40).optional(),
         tagline: z.string().max(240).optional(),
+        whatsappUrl: z.string().url().or(z.literal("")).optional(),
       })
       .strict()
       .optional(),
