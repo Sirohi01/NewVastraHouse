@@ -6,6 +6,7 @@ import { ResponsiveImage } from "./ResponsiveImage";
 
 export type MediaItem = {
   _id: string;
+  originalUrl?: string;
   secureUrl: string;
   altText?: string;
   selectedAspectRatio: string;

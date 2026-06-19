@@ -8,6 +8,8 @@ export type ResponsiveImageProps = {
   objectFit?: "cover" | "contain";
   sizes?: string;
   priority?: boolean;
+  quality?: number;
+  unoptimized?: boolean;
 };
 
 export function ResponsiveImage({
@@ -18,6 +20,8 @@ export function ResponsiveImage({
   objectFit = "cover",
   sizes = "(max-width: 768px) 100vw, 33vw",
   priority = false,
+  quality,
+  unoptimized = false,
 }: Readonly<ResponsiveImageProps>) {
   return (
     <div
@@ -29,8 +33,10 @@ export function ResponsiveImage({
         className={objectFit === "cover" ? "object-cover" : "object-contain"}
         fill
         priority={priority}
+        quality={quality}
         sizes={sizes}
         src={src}
+        unoptimized={unoptimized}
       />
     </div>
   );

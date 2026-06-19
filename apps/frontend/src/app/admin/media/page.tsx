@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, Upload } from "lucide-react";
+import { Loader2, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MediaPicker, type MediaItem } from "@/components/media/MediaPicker";
@@ -55,6 +55,10 @@ export default function AdminMediaPage() {
   }, [accessToken]);
 
   async function uploadMedia(formData: FormData) {
+    if (uploading) {
+      return;
+    }
+
     setUploading(true);
     try {
       const response = await fetch(`${apiBaseUrl}/media/upload`, {
@@ -161,88 +165,119 @@ export default function AdminMediaPage() {
         ) : null}
 
         <Modal
-          onClose={() => setUploadOpen(false)}
+          onClose={() => {
+            if (!uploading) {
+              setUploadOpen(false);
+            }
+          }}
           open={uploadOpen}
           size="md"
           title="Upload media"
         >
-          <form action={uploadMedia} className="grid gap-3 sm:grid-cols-2">
-            <label className="col-span-2 text-xs font-medium">
-              File
-              <input
-                className="mt-1 block w-full rounded-md border border-border p-1.5 text-sm"
-                name="file"
-                required
-                type="file"
-              />
-            </label>
-            <label className="text-xs font-medium">
-              Aspect ratio
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
-                name="aspectRatio"
-              >
-                {aspectRatios.map((ratio) => (
-                  <option key={ratio} value={ratio}>
-                    {ratio}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs font-medium">
-              Context
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
-                name="context"
-              >
-                <option value="product-media">Product media</option>
-                <option value="payment-screenshot">Payment screenshot</option>
-                <option value="review-photo">Review photo</option>
-                <option value="catalog-pdf">Catalog PDF</option>
-              </select>
-            </label>
-            <label className="text-xs font-medium">
-              Object fit
-              <select
-                className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
-                name="objectFit"
-              >
-                <option value="cover">Cover</option>
-                <option value="contain">Contain</option>
-              </select>
-            </label>
-            <label className="text-xs font-medium">
-              Alt text
-              <input
-                className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
-                name="altText"
-                required
-                minLength={3}
-              />
-            </label>
-            <label className="col-span-2 text-xs font-medium">
-              Tags (comma separated)
-              <input
-                className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
-                name="tags"
-              />
-            </label>
-            <div className="col-span-2 flex justify-end gap-2 pt-1">
-              <button
-                className="h-9 rounded-md border border-border px-3 text-sm font-semibold"
-                disabled={uploading}
-                onClick={() => setUploadOpen(false)}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-                disabled={uploading}
-              >
-                {uploading ? "Uploading..." : "Upload"}
-              </button>
-            </div>
+          <form
+            className="relative"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void uploadMedia(new FormData(event.currentTarget));
+            }}
+          >
+            {uploading ? (
+              <div className="absolute inset-0 z-10 grid place-items-center rounded-md bg-background/80 backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold shadow-soft">
+                  <Loader2 aria-hidden="true" className="animate-spin text-primary" size={16} />
+                  Uploading media...
+                </div>
+              </div>
+            ) : null}
+            <fieldset className="grid gap-3 sm:grid-cols-2" disabled={uploading}>
+              <label className="col-span-2 text-xs font-medium">
+                File
+                <input
+                  className="mt-1 block w-full rounded-md border border-border p-1.5 text-sm"
+                  name="file"
+                  required
+                  type="file"
+                />
+              </label>
+              <label className="text-xs font-medium">
+                Aspect ratio
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
+                  name="aspectRatio"
+                >
+                  {aspectRatios.map((ratio) => (
+                    <option key={ratio} value={ratio}>
+                      {ratio}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs font-medium">
+                Context
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
+                  name="context"
+                >
+                  <option value="product-media">Product media</option>
+                  <option value="payment-screenshot">Payment screenshot</option>
+                  <option value="review-photo">Review photo</option>
+                  <option value="catalog-pdf">Catalog PDF</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium">
+                Object fit
+                <select
+                  className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
+                  name="objectFit"
+                >
+                  <option value="cover">Cover</option>
+                  <option value="contain">Contain</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium">
+                Alt text
+                <input
+                  className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
+                  name="altText"
+                  required
+                  minLength={3}
+                />
+              </label>
+              <label className="col-span-2 text-xs font-medium">
+                Tags (comma separated)
+                <input
+                  className="mt-1 h-9 w-full rounded-md border border-border px-2.5 text-sm"
+                  name="tags"
+                />
+              </label>
+              <div className="col-span-2 flex justify-end gap-2 pt-1">
+                <button
+                  className="h-9 rounded-md border border-border px-3 text-sm font-semibold"
+                  disabled={uploading}
+                  onClick={() => setUploadOpen(false)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex h-9 min-w-28 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={uploading}
+                  type="submit"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 aria-hidden="true" className="animate-spin" size={15} />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload aria-hidden="true" size={15} />
+                      Upload
+                    </>
+                  )}
+                </button>
+              </div>
+            </fieldset>
           </form>
         </Modal>
 

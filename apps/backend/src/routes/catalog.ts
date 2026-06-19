@@ -150,6 +150,7 @@ const taxonomyInputSchema = z
     name: z.string().min(1).max(140),
     slug: z.string().max(180).optional(),
     description: z.string().optional(),
+    banner: mediaReferenceSchema.nullable().optional(),
     active: z.boolean().default(true),
     seo: seoSchema,
   })

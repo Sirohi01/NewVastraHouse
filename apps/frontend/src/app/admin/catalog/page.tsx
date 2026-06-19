@@ -1,8 +1,10 @@
 "use client";
 
-import { Edit3, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Edit3, ImagePlus, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { MediaPicker, type MediaItem } from "@/components/media/MediaPicker";
+import { ResponsiveImage } from "@/components/media/ResponsiveImage";
 import { EmptyState } from "@/components/states/EmptyState";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -13,6 +15,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { Textarea } from "@/components/ui/Textarea";
 import { errorMessage, useToast } from "@/components/ui/Toast";
 import { apiFetch } from "@/lib/api";
+import type { MediaReference } from "@/lib/catalog";
 import { useAuthStore } from "@/stores/authStore";
 
 type TaxonomyKind = "categories" | "collections" | "tags";
@@ -23,6 +26,7 @@ type TaxonomyItem = {
   name: string;
   slug: string;
   description?: string;
+  banner?: MediaReference | null;
   active: boolean;
 };
 
@@ -31,6 +35,7 @@ type TaxonomyForm = {
   name: string;
   slug: string;
   description: string;
+  banner: MediaReference | null;
   active: boolean;
 };
 
@@ -45,6 +50,7 @@ const blankForm: TaxonomyForm = {
   name: "",
   slug: "",
   description: "",
+  banner: null,
   active: true,
 };
 
@@ -54,11 +60,13 @@ export default function AdminCatalogPage() {
   const [kind, setKind] = useState<TaxonomyKind>("categories");
   const [items, setItems] = useState<TaxonomyItem[]>([]);
   const [form, setForm] = useState<TaxonomyForm>(blankForm);
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [editingId, setEditingId] = useState<string>();
   const [editorOpen, setEditorOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TaxonomyItem>();
+  const imageMedia = useMemo(() => media.filter((item) => item.resourceType === "image"), [media]);
 
   async function loadItems(nextKind: TaxonomyKind = kind) {
     setLoading(true);
@@ -84,11 +92,32 @@ export default function AdminCatalogPage() {
   useEffect(() => {
     if (accessToken) {
       void loadItems(kind);
+      void loadMedia();
     }
   }, [accessToken, kind]);
 
+  async function loadMedia() {
+    try {
+      const payload = await apiFetch<{ media: MediaItem[] }>("/media", { accessToken });
+      setMedia(payload.media);
+    } catch (error) {
+      toast.error(errorMessage(error, "Failed to load media library"));
+    }
+  }
+
   function updateForm(field: keyof TaxonomyForm, value: string | boolean) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function setBanner(item: MediaItem) {
+    setForm((current) => ({
+      ...current,
+      banner: toMediaReference(item, current.name || labelFor(kind).replace(/s$/, ""), "9:16"),
+    }));
+  }
+
+  function clearBanner() {
+    setForm((current) => ({ ...current, banner: null }));
   }
 
   function selectKind(nextKind: TaxonomyKind) {
@@ -108,6 +137,7 @@ export default function AdminCatalogPage() {
       name: item.name,
       slug: item.slug,
       description: item.description ?? "",
+      banner: item.banner ?? null,
       active: item.active,
     });
     setEditorOpen(true);
@@ -123,6 +153,7 @@ export default function AdminCatalogPage() {
             name: form.name,
             slug: form.slug || undefined,
             description: form.description || undefined,
+            banner: form.banner,
             active: form.active,
           };
     const path = editingId ? `/catalog/admin/${kind}/${editingId}` : `/catalog/admin/${kind}`;
@@ -220,6 +251,24 @@ export default function AdminCatalogPage() {
                 render: (item) => <span className="font-semibold">{item.name}</span>,
               },
               {
+                header: "Image",
+                render: (item) =>
+                  kind === "tags" ? (
+                    <span className="text-muted-foreground">Not used</span>
+                  ) : item.banner?.url ? (
+                    <div className="w-12 overflow-hidden rounded-md border border-border">
+                      <ResponsiveImage
+                        alt={item.banner.altText ?? `${item.name} banner`}
+                        aspectRatio={item.banner.aspectRatio ?? "9:16"}
+                        sizes="48px"
+                        src={item.banner.url}
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">No image</span>
+                  ),
+              },
+              {
                 header: "Slug",
                 render: (item) => <span className="text-muted-foreground">{item.slug}</span>,
               },
@@ -283,11 +332,49 @@ export default function AdminCatalogPage() {
             />
             <Field label="Slug" onChange={(value) => updateForm("slug", value)} value={form.slug} />
             {kind !== "tags" ? (
-              <Textarea
-                label="Description"
-                onChange={(value) => updateForm("description", value)}
-                value={form.description}
-              />
+              <>
+                <Textarea
+                  label="Description"
+                  onChange={(value) => updateForm("description", value)}
+                  value={form.description}
+                />
+                <div className="rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <ImagePlus aria-hidden="true" size={16} />
+                    Banner Image
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Used on category and collection cards. Recommended ratio: 9:16.
+                  </p>
+                  {form.banner?.url ? (
+                    <div className="mt-3 grid gap-2">
+                      <div className="w-32 overflow-hidden rounded-md border border-border">
+                        <ResponsiveImage
+                          alt={form.banner.altText ?? `${form.name || "Catalog"} banner`}
+                          aspectRatio={form.banner.aspectRatio ?? "9:16"}
+                          sizes="128px"
+                          src={form.banner.url}
+                        />
+                      </div>
+                      <button
+                        className="inline-flex h-8 w-fit items-center gap-1.5 rounded-md border border-destructive/40 px-2 text-xs font-semibold text-destructive"
+                        onClick={clearBanner}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={13} />
+                        Remove image
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
+                      No banner selected.
+                    </p>
+                  )}
+                  <div className="mt-3">
+                    <MediaPicker media={imageMedia} onSelect={setBanner} />
+                  </div>
+                </div>
+              </>
             ) : null}
             <Checkbox
               checked={form.active}
@@ -324,4 +411,19 @@ export default function AdminCatalogPage() {
 
 function labelFor(kind: TaxonomyKind): string {
   return tabs.find((tab) => tab.value === kind)?.label ?? "Catalog";
+}
+
+function toMediaReference(
+  item: MediaItem,
+  fallbackAlt: string,
+  aspectRatio: string,
+): MediaReference {
+  return {
+    mediaId: item._id,
+    url: item.originalUrl ?? item.secureUrl,
+    altText: item.altText ?? `${fallbackAlt} banner image`,
+    type: "image",
+    aspectRatio: item.selectedAspectRatio || aspectRatio,
+    objectFit: "cover",
+  };
 }

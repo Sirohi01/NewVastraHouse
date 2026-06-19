@@ -65,7 +65,7 @@ export function Header({ cms }: Readonly<{ cms?: CmsContent }>) {
         </div>
       </div>
 
-      <div className="mx-auto grid h-20 max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-5 px-5">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-5 xl:grid xl:h-20 xl:grid-cols-[1fr_auto_1fr] xl:gap-5">
         <nav className="hidden items-center gap-8 text-xs font-semibold uppercase tracking-wide text-[#3b3128] xl:flex">
           {leftNavItems.map((item) => (
             <a className="transition hover:text-primary" href={item.href} key={item.label}>
@@ -74,9 +74,12 @@ export function Header({ cms }: Readonly<{ cms?: CmsContent }>) {
           ))}
         </nav>
 
-        <a className="grid min-w-48 place-items-center text-center leading-none" href="/">
+        <a
+          className="grid min-w-0 place-items-start text-left leading-none xl:min-w-48 xl:place-items-center xl:text-center"
+          href="/"
+        >
           {cms?.footer?.brandLogo?.url ? (
-            <span className="block w-32">
+            <span className="block w-28 xl:w-32">
               <ResponsiveImage
                 alt={cms.footer.brandLogo.altText ?? "The Vastra House logo"}
                 aspectRatio={cms.footer.brandLogo.aspectRatio ?? "1:1"}
@@ -86,10 +89,10 @@ export function Header({ cms }: Readonly<{ cms?: CmsContent }>) {
             </span>
           ) : (
             <>
-              <span className="block font-serif text-4xl uppercase tracking-[0.18em] text-[#8a6a42]">
+              <span className="block font-serif text-3xl uppercase tracking-[0.18em] text-[#8a6a42] sm:text-4xl">
                 Vastra
               </span>
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.45em] text-[#8a6a42]">
+              <span className="block pl-1 text-[9px] font-semibold uppercase tracking-[0.45em] text-[#8a6a42] sm:text-[10px] xl:pl-0">
                 House
               </span>
             </>

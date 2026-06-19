@@ -40,6 +40,7 @@ const cmsContentSchema = new Schema(
         secondaryCta: linkSchema,
         slides: [heroSlideSchema],
       },
+      storyMedia: mediaReferenceSchema,
       announcement: { type: String, trim: true },
     },
     about: {

@@ -38,7 +38,7 @@ const heroSlideSchema = z
     eyebrow: z.string().max(120).optional(),
     fontFamily: z.enum(["serif", "sans"]).default("serif"),
     fontSize: z.enum(["sm", "md", "lg"]).default("lg"),
-    media: mediaReferenceSchema.optional(),
+    media: mediaReferenceSchema.nullable().optional(),
     primaryCta: linkSchema.optional(),
     secondaryCta: linkSchema.optional(),
     textColor: z.string().max(40).default("#ffffff"),
@@ -65,7 +65,7 @@ const cmsSchema = z
           .object({
             copy: z.string().max(500).optional(),
             eyebrow: z.string().max(120).optional(),
-            media: mediaReferenceSchema.optional(),
+            media: mediaReferenceSchema.nullable().optional(),
             primaryCta: linkSchema.optional(),
             secondaryCta: linkSchema.optional(),
             slides: z.array(heroSlideSchema).max(8).default([]),
@@ -73,6 +73,7 @@ const cmsSchema = z
           })
           .strict()
           .optional(),
+        storyMedia: mediaReferenceSchema.nullable().optional(),
       })
       .strict()
       .optional(),
@@ -80,7 +81,7 @@ const cmsSchema = z
       .object({
         description: z.string().max(500).optional(),
         eyebrow: z.string().max(120).optional(),
-        media: mediaReferenceSchema.optional(),
+        media: mediaReferenceSchema.nullable().optional(),
         primaryCta: linkSchema.optional(),
         storyCopy: z.string().max(1200).optional(),
         storyEyebrow: z.string().max(120).optional(),
@@ -93,7 +94,7 @@ const cmsSchema = z
     navigation: z.array(linkSchema).max(20).default([]),
     footer: z
       .object({
-        brandLogo: mediaReferenceSchema.optional(),
+        brandLogo: mediaReferenceSchema.nullable().optional(),
         email: z.string().email().or(z.literal("")).optional(),
         instagramPosts: z.array(z.string().url()).max(20).default([]),
         instagramUrl: z.string().url().or(z.literal("")).optional(),

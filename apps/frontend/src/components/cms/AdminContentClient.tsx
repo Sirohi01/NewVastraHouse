@@ -1,6 +1,6 @@
 "use client";
 
-import { ImagePlus, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
+import { ImagePlus, Loader2, Plus, RefreshCw, Save, Trash2, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { MediaPicker, type MediaItem } from "@/components/media/MediaPicker";
@@ -49,6 +49,7 @@ export function AdminContentClient() {
   const [uploadingHero, setUploadingHero] = useState(false);
 
   const heroMedia = content.home?.hero?.media;
+  const storyMedia = content.home?.storyMedia;
   const imageMedia = useMemo(() => media.filter((item) => item.resourceType === "image"), [media]);
 
   useEffect(() => {
@@ -209,14 +210,59 @@ export function AdminContentClient() {
   }
 
   function setHeroMedia(item: MediaItem) {
+    const mediaReference = toMediaReference(
+      item,
+      content.home?.hero?.title ?? "Home hero image",
+      "16:7",
+    );
+
     updateContent((current) => ({
       ...current,
       home: {
         ...current.home,
         hero: {
           ...current.home?.hero,
-          media: toMediaReference(item, content.home?.hero?.title ?? "Home hero image", "16:7"),
+          media: mediaReference,
+          slides: (current.home?.hero?.slides ?? []).map((slide, index) =>
+            index === 0 ? { ...slide, media: mediaReference } : slide,
+          ),
         },
+      },
+    }));
+  }
+
+  function clearHeroMedia() {
+    updateContent((current) => ({
+      ...current,
+      home: {
+        ...current.home,
+        hero: {
+          ...current.home?.hero,
+          media: null,
+          slides: (current.home?.hero?.slides ?? []).map((slide, index) =>
+            index === 0 ? { ...slide, media: null } : slide,
+          ),
+        },
+      },
+    }));
+  }
+
+  function setHomeStoryMedia(item: MediaItem) {
+    updateContent((current) => ({
+      ...current,
+      home: {
+        ...current.home,
+        storyMedia: toMediaReference(item, "Home our story image", "16:7"),
+      },
+    }));
+  }
+
+  function clearHomeStoryMedia() {
+    updateContent((current) => ({
+      ...current,
+      home: {
+        ...current.home,
+        storyMedia: null,
       },
     }));
   }
@@ -321,6 +367,20 @@ export function AdminContentClient() {
     updateHeroSlide(index, {
       media: toMediaReference(item, heroSlides()[index]?.title ?? "Home hero slide", "16:7"),
     });
+  }
+
+  function clearHeroSlideMedia(index: number) {
+    updateHeroSlide(index, { media: null });
+  }
+
+  function clearAboutMedia() {
+    updateContent((current) => ({
+      ...current,
+      about: {
+        ...current.about,
+        media: null,
+      },
+    }));
   }
 
   async function uploadHeroMedia() {
@@ -460,6 +520,16 @@ export function AdminContentClient() {
       footer: {
         ...current.footer,
         brandLogo: toMediaReference(item, "The Vastra House logo", "1:1"),
+      },
+    }));
+  }
+
+  function clearFooterLogo() {
+    updateContent((current) => ({
+      ...current,
+      footer: {
+        ...current.footer,
+        brandLogo: null,
       },
     }));
   }
@@ -729,9 +799,19 @@ export function AdminContentClient() {
                       </div>
                       <div className="mt-3">
                         {slide.media?.url ? (
-                          <p className="mb-2 rounded-md border border-border p-2 text-xs text-muted-foreground">
-                            Selected media: {slide.media.altText ?? slide.media.url}
-                          </p>
+                          <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-border p-2 text-xs text-muted-foreground">
+                            <span className="min-w-0 truncate">
+                              Selected media: {slide.media.altText ?? slide.media.url}
+                            </span>
+                            <button
+                              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-destructive/40 px-2 font-semibold text-destructive"
+                              onClick={() => clearHeroSlideMedia(index)}
+                              type="button"
+                            >
+                              <Trash2 aria-hidden="true" size={12} />
+                              Remove
+                            </button>
+                          </div>
                         ) : null}
                         <MediaPicker
                           media={media}
@@ -749,13 +829,23 @@ export function AdminContentClient() {
                   Hero Media
                 </div>
                 {heroMedia?.url ? (
-                  <ResponsiveImage
-                    alt={heroMedia.altText ?? "Home hero image"}
-                    aspectRatio={heroMedia.aspectRatio?.replace(":", " / ") ?? "16 / 7"}
-                    className="mt-3 rounded-md border border-border"
-                    objectFit={heroMedia.objectFit}
-                    src={heroMedia.url}
-                  />
+                  <div className="mt-3 grid gap-2">
+                    <ResponsiveImage
+                      alt={heroMedia.altText ?? "Home hero image"}
+                      aspectRatio={heroMedia.aspectRatio?.replace(":", " / ") ?? "16 / 7"}
+                      className="rounded-md border border-border"
+                      objectFit={heroMedia.objectFit}
+                      src={heroMedia.url}
+                    />
+                    <button
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-destructive/40 text-sm font-semibold text-destructive"
+                      onClick={clearHeroMedia}
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={14} />
+                      Remove selected hero media
+                    </button>
+                  </div>
                 ) : (
                   <p className="mt-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
                     No hero media selected.
@@ -772,18 +862,64 @@ export function AdminContentClient() {
                     />
                   </label>
                   <button
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border text-sm font-semibold disabled:opacity-60"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={uploadingHero}
                     onClick={() => void uploadHeroMedia()}
                     type="button"
                   >
-                    <Upload aria-hidden="true" size={15} />
-                    {uploadingHero ? "Uploading..." : "Upload Hero Media"}
+                    {uploadingHero ? (
+                      <>
+                        <Loader2 aria-hidden="true" className="animate-spin" size={15} />
+                        Uploading hero media...
+                      </>
+                    ) : (
+                      <>
+                        <Upload aria-hidden="true" size={15} />
+                        Upload Hero Media
+                      </>
+                    )}
                   </button>
                 </div>
                 <div className="mt-4">
                   <p className="mb-2 text-xs font-semibold">Pick from media library</p>
                   <MediaPicker media={media} onSelect={setHeroMedia} />
+                </div>
+
+                <div className="mt-6 border-t border-border pt-5">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <ImagePlus aria-hidden="true" size={16} />
+                    Home Our Story Image
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Used on the home page Our Story band. Recommended aspect ratio: 16:7.
+                  </p>
+                  {storyMedia?.url ? (
+                    <div className="mt-3 grid gap-2">
+                      <ResponsiveImage
+                        alt={storyMedia.altText ?? "Home our story image"}
+                        aspectRatio={storyMedia.aspectRatio?.replace(":", " / ") ?? "16 / 7"}
+                        className="rounded-md border border-border"
+                        objectFit={storyMedia.objectFit}
+                        src={storyMedia.url}
+                      />
+                      <button
+                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-destructive/40 text-sm font-semibold text-destructive"
+                        onClick={clearHomeStoryMedia}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={14} />
+                        Remove home story image
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
+                      No home story image selected.
+                    </p>
+                  )}
+                  <div className="mt-4">
+                    <p className="mb-2 text-xs font-semibold">Pick from media library</p>
+                    <MediaPicker media={imageMedia} onSelect={setHomeStoryMedia} />
+                  </div>
                 </div>
               </aside>
             </section>
@@ -891,13 +1027,23 @@ export function AdminContentClient() {
                   About Image
                 </div>
                 {content.about?.media?.url ? (
-                  <ResponsiveImage
-                    alt={content.about.media.altText ?? "About story image"}
-                    aspectRatio={content.about.media.aspectRatio ?? "16 / 9"}
-                    className="mt-3 rounded-md border border-border"
-                    objectFit={content.about.media.objectFit}
-                    src={content.about.media.url}
-                  />
+                  <div className="mt-3 grid gap-2">
+                    <ResponsiveImage
+                      alt={content.about.media.altText ?? "About story image"}
+                      aspectRatio={content.about.media.aspectRatio ?? "16 / 9"}
+                      className="rounded-md border border-border"
+                      objectFit={content.about.media.objectFit}
+                      src={content.about.media.url}
+                    />
+                    <button
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-destructive/40 text-sm font-semibold text-destructive"
+                      onClick={clearAboutMedia}
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={14} />
+                      Remove about image
+                    </button>
+                  </div>
                 ) : (
                   <p className="mt-3 rounded-md border border-border p-3 text-sm text-muted-foreground">
                     No about image selected.
@@ -929,13 +1075,23 @@ export function AdminContentClient() {
               <div className="mb-4 grid gap-3 rounded-md border border-border p-3">
                 <p className="text-sm font-semibold">Brand Logo</p>
                 {content.footer?.brandLogo?.url ? (
-                  <div className="w-32">
-                    <ResponsiveImage
-                      alt={content.footer.brandLogo.altText ?? "The Vastra House logo"}
-                      aspectRatio={content.footer.brandLogo.aspectRatio ?? "1:1"}
-                      objectFit={content.footer.brandLogo.objectFit ?? "contain"}
-                      src={content.footer.brandLogo.url}
-                    />
+                  <div className="grid gap-2">
+                    <div className="w-32">
+                      <ResponsiveImage
+                        alt={content.footer.brandLogo.altText ?? "The Vastra House logo"}
+                        aspectRatio={content.footer.brandLogo.aspectRatio ?? "1:1"}
+                        objectFit={content.footer.brandLogo.objectFit ?? "contain"}
+                        src={content.footer.brandLogo.url}
+                      />
+                    </div>
+                    <button
+                      className="inline-flex h-9 w-fit items-center gap-2 rounded-md border border-destructive/40 px-3 text-sm font-semibold text-destructive"
+                      onClick={clearFooterLogo}
+                      type="button"
+                    >
+                      <Trash2 aria-hidden="true" size={14} />
+                      Remove logo
+                    </button>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -1265,7 +1421,7 @@ function toMediaReference(
     mediaId: item._id,
     objectFit: "cover",
     type: item.resourceType === "video" ? "video" : "image",
-    url: item.secureUrl,
+    url: item.originalUrl ?? item.secureUrl,
   };
 }
 
@@ -1281,7 +1437,13 @@ function cleanLink(link?: CmsLink): CmsLink | undefined {
   };
 }
 
-function cleanMediaReference(mediaReference?: MediaReference): MediaReference | undefined {
+function cleanMediaReference(
+  mediaReference?: MediaReference | null,
+): MediaReference | null | undefined {
+  if (mediaReference === null) {
+    return null;
+  }
+
   if (!mediaReference?.url) {
     return undefined;
   }
@@ -1351,6 +1513,7 @@ function normalizeContent(content: CmsContent): CmsContent {
     },
     home: {
       announcement: content.home?.announcement ?? defaultCmsContent.home?.announcement,
+      storyMedia: cleanMediaReference(content.home?.storyMedia),
       hero: {
         copy: homeHero.copy,
         eyebrow: homeHero.eyebrow,

@@ -12,7 +12,7 @@ export type CmsHeroSlide = {
   eyebrow?: string;
   fontFamily?: "serif" | "sans";
   fontSize?: "sm" | "md" | "lg";
-  media?: MediaReference;
+  media?: MediaReference | null;
   primaryCta?: CmsLink;
   secondaryCta?: CmsLink;
   textColor?: string;
@@ -29,12 +29,13 @@ export type CmsContent = {
     hero?: {
       copy?: string;
       eyebrow?: string;
-      media?: MediaReference;
+      media?: MediaReference | null;
       primaryCta?: CmsLink;
       secondaryCta?: CmsLink;
       slides?: CmsHeroSlide[];
       title?: string;
     };
+    storyMedia?: MediaReference | null;
   };
   about?: {
     eyebrow?: string;
@@ -43,7 +44,7 @@ export type CmsContent = {
     storyEyebrow?: string;
     storyTitle?: string;
     storyCopy?: string;
-    media?: MediaReference;
+    media?: MediaReference | null;
     primaryCta?: CmsLink;
     values?: Array<{
       icon?: "sparkles" | "award" | "shield" | "care";
@@ -53,7 +54,7 @@ export type CmsContent = {
   };
   navigation?: CmsLink[];
   footer?: {
-    brandLogo?: MediaReference;
+    brandLogo?: MediaReference | null;
     email?: string;
     instagramPosts?: string[];
     instagramUrl?: string;
@@ -193,6 +194,7 @@ export function sanitizeCmsContent(content: CmsContent): CmsContent {
         })),
         title: mergedHero.title,
       },
+      storyMedia: sanitizeMediaReference(content.home?.storyMedia),
     },
     about: {
       description: mergedAbout.description,
@@ -250,7 +252,13 @@ function sanitizeLink(link?: CmsLink): CmsLink | undefined {
   };
 }
 
-function sanitizeMediaReference(mediaReference?: MediaReference): MediaReference | undefined {
+function sanitizeMediaReference(
+  mediaReference?: MediaReference | null,
+): MediaReference | null | undefined {
+  if (mediaReference === null) {
+    return null;
+  }
+
   if (!mediaReference?.url) {
     return undefined;
   }

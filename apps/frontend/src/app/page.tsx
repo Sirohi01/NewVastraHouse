@@ -53,7 +53,13 @@ export default async function HomePage() {
   const topTiles = [...categoryTiles, ...collectionTiles, ...productTiles].slice(0, 5);
   const heroImage = productTiles[0]?.media.src ?? collectionTiles[0]?.media.src ?? fallbackHero;
   const heroSlides = normalizeHeroSlides(cms?.home?.hero?.slides, cms?.home?.hero, heroImage);
-  const storyImage = productTiles[1]?.media.src ?? collectionTiles[1]?.media.src ?? heroImage;
+  const storyImage =
+    cms?.home?.storyMedia?.url ??
+    productTiles[1]?.media.src ??
+    collectionTiles[1]?.media.src ??
+    heroImage;
+  const storyImageAlt =
+    cms?.home?.storyMedia?.altText ?? "Wide embroidered fabric detail for The Vastra House story";
   const socialTiles = [...productTiles, ...categoryTiles, ...collectionTiles].slice(0, 7);
   const instagramPosts = cms?.footer?.instagramPosts?.filter(Boolean) ?? [];
 
@@ -72,7 +78,7 @@ export default async function HomePage() {
         </div>
         <Hero slides={heroSlides} />
         <SquareTileRail tiles={topTiles} />
-        <StoryBand image={storyImage} />
+        <StoryBand image={storyImage} imageAlt={storyImageAlt} />
         <CollectionGrid tiles={collectionTiles.length ? collectionTiles : categoryTiles} />
         <ProductGrid products={productTiles} />
         <TrustStrip />
@@ -165,13 +171,15 @@ function Hero({ slides }: Readonly<{ slides: CmsHeroSlide[] }>) {
                 }
                 aspectRatio={HERO_ASPECT_RATIO}
                 priority={index === 0}
+                quality={95}
                 sizes="100vw"
                 src={slide.media?.url ?? fallbackHero}
+                unoptimized
               />
             )}
           </div>
         ))}
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(46_12_18/0.86),rgb(46_12_18/0.5)_48%,rgb(46_12_18/0.12))]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(46_12_18/0.58),rgb(46_12_18/0.28)_48%,rgb(46_12_18/0.04))]" />
 
         {/* Royal inset frame + corner filigree */}
         <div className="pointer-events-none absolute inset-3 border border-[#caa14e]/45 sm:inset-5 md:inset-6">
@@ -288,7 +296,7 @@ function SquareTileRail({ tiles }: Readonly<{ tiles: VisualTile[] }>) {
   );
 }
 
-function StoryBand({ image }: Readonly<{ image: string }>) {
+function StoryBand({ image, imageAlt }: Readonly<{ image: string; imageAlt: string }>) {
   return (
     <section className="grid border-y border-[#e1d6c4] bg-[#fffdf8] lg:grid-cols-[40%_60%]">
       <div className="flex items-center px-6 py-10 lg:justify-center">
@@ -317,9 +325,8 @@ function StoryBand({ image }: Readonly<{ image: string }>) {
       </div>
       <div className="relative">
         <ResponsiveImage
-          alt="Wide embroidered fabric detail for The Vastra House story"
+          alt={imageAlt}
           aspectRatio="16 / 7"
-          className="h-full"
           sizes="(max-width: 1024px) 100vw, 60vw"
           src={image}
         />

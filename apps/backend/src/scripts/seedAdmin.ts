@@ -5,8 +5,8 @@ import { User } from "../models/User.js";
 import { hashPassword } from "../services/passwordService.js";
 import { seedDefaultRoles } from "../services/roleSeedService.js";
 
-const defaultEmail = "admin@vastrahouse.local";
-const defaultPassword = "Admin@123456";
+const defaultEmail = "manishsirohi023@gmail.com";
+const defaultPassword = "Manish123";
 
 const email = (process.env.SEED_ADMIN_EMAIL || defaultEmail).trim().toLowerCase();
 const password = process.env.SEED_ADMIN_PASSWORD || defaultPassword;

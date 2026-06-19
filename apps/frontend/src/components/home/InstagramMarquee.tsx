@@ -45,10 +45,10 @@ export function InstagramMarquee({ posts }: Readonly<{ posts: string[] }>) {
 
   return (
     <div className="mt-5 overflow-hidden">
-      <div className="flex w-max animate-[instaMarquee_38s_linear_infinite] gap-4 hover:[animation-play-state:paused]">
+      <div className="instagram-marquee flex w-max animate-[instaMarquee_38s_linear_infinite] items-stretch gap-4 hover:[animation-play-state:paused]">
         {marqueePosts.map((href, index) => (
           <div
-            className="w-[300px] shrink-0 overflow-hidden rounded-sm border border-[#e1d6c4] bg-white p-2 shadow-sm sm:w-[340px]"
+            className="h-[460px] w-[300px] shrink-0 overflow-hidden rounded-sm border border-[#e1d6c4] bg-white p-2 shadow-sm sm:h-[520px] sm:w-[340px]"
             key={`${href}-${index}`}
           >
             <blockquote
@@ -73,6 +73,14 @@ export function InstagramMarquee({ posts }: Readonly<{ posts: string[] }>) {
           </div>
         ))}
       </div>
+      <style jsx global>{`
+        .instagram-marquee .instagram-media,
+        .instagram-marquee iframe {
+          height: 100% !important;
+          min-height: 100% !important;
+          max-height: 100% !important;
+        }
+      `}</style>
     </div>
   );
 }

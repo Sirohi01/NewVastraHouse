@@ -73,7 +73,7 @@ mediaRouter.post(
             );
       const media = await Media.create({
         originalUrl: uploadResult.secure_url,
-        secureUrl: renditions[0].url,
+        secureUrl: uploadResult.secure_url,
         publicId: uploadResult.public_id,
         resourceType: detectedFile.resourceType,
         deliveryType,
