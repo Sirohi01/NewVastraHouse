@@ -54,6 +54,18 @@ export function CartClient() {
     applyCart(payload.cart);
   }
 
+  async function updatePurchaseMode(lineItemId: string, purchaseMode: "regular" | "pre_order") {
+    const payload = await commerceFetch<{ cart: Cart }>(
+      `/commerce/cart/items/${lineItemId}/purchase-mode`,
+      {
+        accessToken,
+        body: JSON.stringify({ purchaseMode }),
+        method: "PATCH",
+      },
+    );
+    applyCart(payload.cart);
+  }
+
   async function setGiftPackaging(enabled: boolean) {
     const payload = await commerceFetch<{ cart: Cart }>("/commerce/cart/gift-packaging", {
       accessToken,
@@ -84,6 +96,9 @@ export function CartClient() {
 
   const taxBreakdown = cart.totals.taxBreakdown?.filter((tax) => tax.gstAmount > 0) ?? [];
   const giftCardDiscount = cart.totals.giftCardDiscount;
+  const payableNow = calculateCartPayableNow(cart);
+  const showPayableNow = payableNow < cart.totals.grandTotal;
+  const balanceLater = Math.max(0, cart.totals.grandTotal - payableNow);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
@@ -115,10 +130,10 @@ export function CartClient() {
                   </Link>
                   <p className="mt-1 text-sm text-muted-foreground">{item.sku}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {item.preOrder?.enabled
+                    {item.purchaseMode === "pre_order" || item.preOrder?.enabled
                       ? `Pre-order${
-                          item.preOrder.paymentMode === "advance"
-                            ? ` · ${item.preOrder.advancePercent ?? 0}% advance`
+                          item.preOrder?.paymentMode === "advance" || item.preOrder?.advancePercent
+                            ? ` · ${item.preOrder?.advancePercent ?? 0}% advance`
                             : " · full payment"
                         }`
                       : "Ready stock · direct order"}
@@ -128,6 +143,26 @@ export function CartClient() {
                     {item.gstRate ? ` · GST ${item.gstRate}% included` : ""}
                     {item.hsnCode ? ` · HSN ${item.hsnCode}` : ""}
                   </p>
+                  {item.preOrder?.enabled || item.preOrderOption?.enabled ? (
+                    <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Purchase type
+                      <select
+                        className="mt-1 h-9 rounded-md border border-border bg-card px-2 text-sm normal-case tracking-normal text-foreground"
+                        onChange={(event) =>
+                          updatePurchaseMode(
+                            item._id,
+                            event.target.value as "regular" | "pre_order",
+                          )
+                        }
+                        value={
+                          item.purchaseMode ?? (item.preOrder?.enabled ? "pre_order" : "regular")
+                        }
+                      >
+                        <option value="regular">Regular order</option>
+                        <option value="pre_order">Pre-order</option>
+                      </select>
+                    </label>
+                  ) : null}
                 </div>
                 <p className="font-semibold">{formatMoney(item.unitPrice, item.currencyCode)}</p>
               </div>
@@ -188,10 +223,6 @@ export function CartClient() {
         </form>
         <dl className="mt-5 grid gap-3 text-sm">
           <TotalRow
-            label="Subtotal incl. GST"
-            value={formatMoney(cart.totals.subtotal, cart.totals.currencyCode)}
-          />
-          <TotalRow
             label="Taxable value"
             value={formatMoney(cart.totals.taxableAmount ?? 0, cart.totals.currencyCode)}
           />
@@ -203,6 +234,10 @@ export function CartClient() {
             />
           ))}
           <TotalRow
+            label="Subtotal incl. GST"
+            value={formatMoney(cart.totals.subtotal, cart.totals.currencyCode)}
+          />
+          <TotalRow
             label="Gift packaging"
             value={formatMoney(cart.totals.giftPackagingFee, cart.totals.currencyCode)}
           />
@@ -213,11 +248,35 @@ export function CartClient() {
             />
           ) : null}
           <div className="border-t border-border pt-3">
-            <TotalRow
-              label="Total"
-              strong
-              value={formatMoney(cart.totals.grandTotal, cart.totals.currencyCode)}
-            />
+            {showPayableNow ? (
+              <>
+                <p className="mb-3 rounded-md bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
+                  This cart has a pre-order item. Pay the advance now; the remaining balance will be
+                  collected before dispatch.
+                </p>
+                <TotalRow
+                  label="Full order value"
+                  value={formatMoney(cart.totals.grandTotal, cart.totals.currencyCode)}
+                />
+                <TotalRow
+                  label="Balance later"
+                  value={formatMoney(balanceLater, cart.totals.currencyCode)}
+                />
+                <div className="mt-2">
+                  <TotalRow
+                    label="Pre-order advance due now"
+                    strong
+                    value={formatMoney(payableNow, cart.totals.currencyCode)}
+                  />
+                </div>
+              </>
+            ) : (
+              <TotalRow
+                label="Total"
+                strong
+                value={formatMoney(cart.totals.grandTotal, cart.totals.currencyCode)}
+              />
+            )}
           </div>
         </dl>
         <Link
@@ -229,6 +288,24 @@ export function CartClient() {
       </aside>
     </div>
   );
+}
+
+function calculateCartPayableNow(cart: Cart) {
+  const itemPayable = cart.items.reduce((total, item) => {
+    const lineTotal = item.unitPrice * item.quantity;
+    if (!item.preOrder?.enabled) {
+      return total + lineTotal;
+    }
+
+    const isAdvance =
+      item.preOrder.paymentMode === "advance" || Boolean(item.preOrder.advancePercent);
+    const percent = isAdvance ? (item.preOrder.advancePercent ?? 0) : 100;
+
+    return total + Math.round((lineTotal * percent) / 100);
+  }, 0);
+  const payable = itemPayable + cart.totals.giftPackagingFee - cart.totals.giftCardDiscount;
+
+  return Math.max(0, Math.min(cart.totals.grandTotal, Math.round(payable)));
 }
 
 function TotalRow({

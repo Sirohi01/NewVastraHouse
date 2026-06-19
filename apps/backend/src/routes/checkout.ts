@@ -1,9 +1,18 @@
 import { Router } from "express";
 import { z } from "zod";
+import { env } from "../config/env.js";
 import { attachOptionalUser } from "../middleware/authMiddleware.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import { Order } from "../models/Order.js";
-import { createOrderFromCheckout, previewCheckout } from "../services/checkoutService.js";
+import { PaymentSession } from "../models/PaymentSession.js";
+import {
+  createOrderFromCheckout,
+  previewCheckout,
+  sendOrderConfirmationEmail,
+} from "../services/checkoutService.js";
+import { verifyRazorpayPayment } from "../services/paymentService.js";
+import { createProductionTrackersForOrder } from "../services/preOrderService.js";
+import { getRuntimeBooleanSetting, getRuntimeSetting } from "../services/runtimeSettingsService.js";
 
 export const checkoutRouter = Router();
 
@@ -49,6 +58,20 @@ const checkoutSchema = z
 
 checkoutRouter.use(attachOptionalUser);
 
+checkoutRouter.get("/razorpay/config", async (_req, res, next) => {
+  try {
+    res.json({
+      gatewayEnabled: await getRuntimeBooleanSetting(
+        "RAZORPAY_ENABLE_GATEWAY_CALLS",
+        env.RAZORPAY_ENABLE_GATEWAY_CALLS,
+      ),
+      keyId: (await getRuntimeSetting("RAZORPAY_KEY_ID")) ?? env.RAZORPAY_KEY_ID ?? "",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 checkoutRouter.post(
   "/preview",
   validateRequest({
@@ -86,19 +109,67 @@ checkoutRouter.post(
   },
 );
 
+checkoutRouter.post(
+  "/razorpay/confirm",
+  validateRequest({
+    body: z
+      .object({
+        razorpayOrderId: z.string().min(3),
+        razorpayPaymentId: z.string().min(3),
+        razorpaySignature: z.string().min(10),
+      })
+      .strict(),
+  }),
+  async (req, res, next) => {
+    try {
+      const session = await verifyRazorpayPayment({
+        ...req.body,
+        actorId: req.user?.id,
+      });
+      const order = await Order.findOne({ paymentSessionId: session._id });
+
+      if (order && (session.status === "confirmed" || session.status === "partially_paid")) {
+        const hasPreOrderItems = order.items.some(
+          (item: { preOrder?: { enabled?: boolean } }) => item.preOrder?.enabled,
+        );
+        order.status = hasPreOrderItems ? "pre_order_confirmed" : "confirmed";
+        await order.save();
+
+        if (hasPreOrderItems) {
+          await createProductionTrackersForOrder(order);
+        }
+
+        await sendOrderConfirmationEmail(
+          { guestEmail: order.guestEmail, shippingAddress: order.shippingAddress },
+          order,
+          session.payableNow,
+        );
+      }
+
+      res.json({ order, session });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 checkoutRouter.get("/orders/:orderNumber", async (req, res, next) => {
   try {
-    const order = await Order.findOne({
+    const order = (await Order.findOne({
       orderNumber: req.params.orderNumber,
       ...(req.user?.id ? { userId: req.user.id } : {}),
-    }).lean();
+    }).lean()) as { paymentSessionId?: unknown } | null;
 
     if (!order) {
       res.status(404).json({ error: { message: "Order not found" } });
       return;
     }
 
-    res.json({ order });
+    const paymentSession = order.paymentSessionId
+      ? await PaymentSession.findById(order.paymentSessionId).lean()
+      : null;
+
+    res.json({ order, paymentSession });
   } catch (error) {
     next(error);
   }

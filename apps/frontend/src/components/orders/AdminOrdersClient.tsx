@@ -23,6 +23,23 @@ import {
 } from "@/lib/orders";
 import { useAuthStore } from "@/stores/authStore";
 
+const orderTransitionGraph: Record<OrderStatus, OrderStatus[]> = {
+  cancelled: [],
+  cod_confirmed: ["in_production", "packed", "ready_to_dispatch", "cancelled"],
+  confirmed: ["in_production", "packed", "ready_to_dispatch", "cancelled"],
+  delivered: ["returned", "refunded"],
+  in_production: ["packed", "cancelled"],
+  packed: ["ready_to_dispatch", "cancelled"],
+  payment_rejected: ["pending_payment", "cancelled"],
+  payment_verification_pending: ["confirmed", "payment_rejected", "cancelled"],
+  pending_payment: ["confirmed", "payment_verification_pending", "payment_rejected", "cancelled"],
+  pre_order_confirmed: ["in_production", "cancelled"],
+  ready_to_dispatch: ["shipped", "cancelled"],
+  refunded: [],
+  returned: ["refunded"],
+  shipped: ["delivered", "returned"],
+};
+
 const detailTabs = [
   { label: "Items", value: "items" },
   { label: "Status", value: "status" },
@@ -285,10 +302,10 @@ export function AdminOrdersClient() {
               <div className="mt-3">
                 {detailTab === "items" ? (
                   <div className="grid gap-2 text-sm">
-                    {selected.order.items?.map((item) => (
+                    {selected.order.items?.map((item, index) => (
                       <div
                         className="rounded-md border border-border p-2.5"
-                        key={`${item.sku}-${item.quantity}`}
+                        key={`${item.sku}-${item.purchaseMode ?? (item.preOrder?.enabled ? "pre_order" : "regular")}-${index}`}
                       >
                         <p className="font-semibold">{item.productName}</p>
                         <p className="text-muted-foreground">
@@ -302,12 +319,19 @@ export function AdminOrdersClient() {
 
                 {detailTab === "status" ? (
                   <form action={updateStatus} className="grid gap-2.5">
+                    {getNextStatuses(selected.order.status).length ? null : (
+                      <p className="rounded-md bg-muted p-2 text-sm text-muted-foreground">
+                        No further status transition is available for this order.
+                      </p>
+                    )}
                     <select
                       className="h-9 rounded-md border border-border px-2.5 text-sm"
-                      defaultValue={selected.order.status}
+                      disabled={!getNextStatuses(selected.order.status).length}
+                      defaultValue={getNextStatuses(selected.order.status)[0] ?? ""}
                       name="toStatus"
+                      required
                     >
-                      {orderStatuses.map((item) => (
+                      {getNextStatuses(selected.order.status).map((item) => (
                         <option key={item} value={item}>
                           {labelStatus(item)}
                         </option>
@@ -318,7 +342,10 @@ export function AdminOrdersClient() {
                       name="note"
                       placeholder="Note"
                     />
-                    <button className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground">
+                    <button
+                      className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={!getNextStatuses(selected.order.status).length}
+                    >
                       <Send aria-hidden="true" size={15} />
                       Update
                     </button>
@@ -420,6 +447,10 @@ function labelStatus(status: OrderStatus) {
     .split("_")
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function getNextStatuses(status: OrderStatus) {
+  return orderTransitionGraph[status] ?? [];
 }
 
 function optionalString(value: FormDataEntryValue | null) {

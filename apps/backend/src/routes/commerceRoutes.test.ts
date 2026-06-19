@@ -96,6 +96,139 @@ test("cart add-to-cart uses inventory ledger stock before product placeholder st
   assert.equal(response.status, 409);
 });
 
+test("cart keeps the same variant as separate regular and pre-order lines", async (t) => {
+  const originalProductFindOne = Product.findOne;
+  const originalCartFindOne = Cart.findOne;
+  const originalCartCreate = Cart.create;
+  const originalStockLedgerFind = StockLedger.find;
+  const productId = new Types.ObjectId();
+  const variantId = new Types.ObjectId();
+  let cart: InstanceType<typeof Cart> | undefined;
+
+  (Product as unknown as { findOne: unknown }).findOne = () =>
+    chain(
+      buildProduct(productId, variantId, 6, {
+        advancePercent: 40,
+        enabled: true,
+        endAt: new Date("2030-01-01T00:00:00.000Z"),
+        expectedDeliveryAt: new Date("2030-01-10T00:00:00.000Z"),
+        expectedDispatchAt: new Date("2030-01-07T00:00:00.000Z"),
+        paymentMode: "advance",
+        remainingQuantity: 3,
+        startAt: new Date("2020-01-01T00:00:00.000Z"),
+      }),
+    );
+  (StockLedger as unknown as { find: unknown }).find = () => chain([]);
+  (Cart as unknown as { findOne: unknown }).findOne = () => Promise.resolve(cart ?? null);
+  (Cart as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    cart = makeCart(payload);
+    return Promise.resolve(cart);
+  };
+  t.after(() => {
+    (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
+    (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
+    (Cart as unknown as { create: unknown }).create = originalCartCreate;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
+  });
+
+  const { close, url } = await listen();
+  t.after(close);
+
+  const regularResponse = await fetch(`${url}/api/${API_VERSION}/commerce/cart/items`, {
+    body: JSON.stringify({ productId, quantity: 1, variantId }),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Guest-Session-Id": "guest-session-purchase-mode",
+    },
+    method: "POST",
+  });
+  const preOrderResponse = await fetch(`${url}/api/${API_VERSION}/commerce/cart/items`, {
+    body: JSON.stringify({ productId, purchaseMode: "pre_order", quantity: 1, variantId }),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Guest-Session-Id": "guest-session-purchase-mode",
+    },
+    method: "POST",
+  });
+  const payload = (await preOrderResponse.json()) as {
+    cart: {
+      items: Array<{
+        preOrder?: { enabled?: boolean };
+        preOrderOption?: { enabled?: boolean };
+        purchaseMode: "regular" | "pre_order";
+        sku: string;
+      }>;
+    };
+  };
+
+  assert.equal(regularResponse.status, 201);
+  assert.equal(preOrderResponse.status, 201);
+  assert.equal(payload.cart.items.length, 2);
+  assert.deepEqual(payload.cart.items.map((item) => item.purchaseMode).sort(), [
+    "pre_order",
+    "regular",
+  ]);
+  assert.equal(
+    payload.cart.items.find((item) => item.purchaseMode === "regular")?.preOrder?.enabled,
+    undefined,
+  );
+  assert.equal(
+    payload.cart.items.find((item) => item.purchaseMode === "regular")?.preOrderOption?.enabled,
+    true,
+  );
+  assert.equal(
+    payload.cart.items.find((item) => item.purchaseMode === "pre_order")?.preOrder?.enabled,
+    true,
+  );
+});
+
+test("cart rejects pre-order mode when the variant pre-order cap is unavailable", async (t) => {
+  const originalProductFindOne = Product.findOne;
+  const originalCartFindOne = Cart.findOne;
+  const originalCartCreate = Cart.create;
+  const originalStockLedgerFind = StockLedger.find;
+  const productId = new Types.ObjectId();
+  const variantId = new Types.ObjectId();
+  let cart: InstanceType<typeof Cart> | undefined;
+
+  (Product as unknown as { findOne: unknown }).findOne = () =>
+    chain(
+      buildProduct(productId, variantId, 6, {
+        enabled: true,
+        endAt: new Date("2030-01-01T00:00:00.000Z"),
+        paymentMode: "advance",
+        remainingQuantity: 0,
+        startAt: new Date("2020-01-01T00:00:00.000Z"),
+      }),
+    );
+  (StockLedger as unknown as { find: unknown }).find = () => chain([]);
+  (Cart as unknown as { findOne: unknown }).findOne = () => Promise.resolve(cart ?? null);
+  (Cart as unknown as { create: unknown }).create = (payload: Record<string, unknown>) => {
+    cart = makeCart(payload);
+    return Promise.resolve(cart);
+  };
+  t.after(() => {
+    (Product as unknown as { findOne: unknown }).findOne = originalProductFindOne;
+    (Cart as unknown as { findOne: unknown }).findOne = originalCartFindOne;
+    (Cart as unknown as { create: unknown }).create = originalCartCreate;
+    (StockLedger as unknown as { find: unknown }).find = originalStockLedgerFind;
+  });
+
+  const { close, url } = await listen();
+  t.after(close);
+
+  const response = await fetch(`${url}/api/${API_VERSION}/commerce/cart/items`, {
+    body: JSON.stringify({ productId, purchaseMode: "pre_order", quantity: 1, variantId }),
+    headers: {
+      "Content-Type": "application/json",
+      "X-Guest-Session-Id": "guest-session-pre-order-cap",
+    },
+    method: "POST",
+  });
+
+  assert.equal(response.status, 409);
+});
+
 test("cart gift packaging and gift card redemption update totals", async (t) => {
   const originalCartFindOne = Cart.findOne;
   const originalCartCreate = Cart.create;
@@ -276,7 +409,21 @@ function chain<T>(value: T) {
   };
 }
 
-function buildProduct(productId: Types.ObjectId, variantId: Types.ObjectId, stockPlaceholder = 5) {
+function buildProduct(
+  productId: Types.ObjectId,
+  variantId: Types.ObjectId,
+  stockPlaceholder = 5,
+  preOrder?: {
+    advancePercent?: number;
+    enabled: boolean;
+    endAt?: Date;
+    expectedDeliveryAt?: Date;
+    expectedDispatchAt?: Date;
+    paymentMode?: "full" | "advance";
+    remainingQuantity?: number;
+    startAt?: Date;
+  },
+) {
   return {
     _id: productId,
     active: true,
@@ -292,6 +439,7 @@ function buildProduct(productId: Types.ObjectId, variantId: Types.ObjectId, stoc
         salePrice: 1999,
         sku: "TVH-SILK-M-0001",
         stockPlaceholder,
+        preOrder,
       },
     ],
   };

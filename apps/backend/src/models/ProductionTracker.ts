@@ -5,7 +5,7 @@ const productionTrackerSchema = new Schema(
   {
     orderId: { type: Schema.Types.ObjectId, ref: "Order", required: true, index: true },
     orderNumber: { type: String, required: true, trim: true, index: true },
-    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     variantId: { type: Schema.Types.ObjectId, required: true },
     sku: { type: String, required: true, trim: true, uppercase: true, index: true },
@@ -28,6 +28,7 @@ const productionTrackerSchema = new Schema(
 );
 
 productionTrackerSchema.index({ stage: 1, createdAt: -1 });
+productionTrackerSchema.index({ orderId: 1, variantId: 1 }, { unique: true });
 
 export type ProductionTrackerDocument = InferSchemaType<typeof productionTrackerSchema>;
 

@@ -26,7 +26,9 @@ export function buildOtpTemplate(code: string): AuthEmailTemplate {
 }
 
 export function buildOrderConfirmationTemplate(input: {
+  balanceRemaining: string;
   customerName?: string;
+  dueNow: string;
   orderNumber: string;
   trackUrl: string;
   total: string;
@@ -40,7 +42,9 @@ export function buildOrderConfirmationTemplate(input: {
 Your The Vastra House booking is confirmed.
 
 Order / Track ID: ${input.orderNumber}
-Total: ${input.total}
+Full order value: ${input.total}
+Paid / due now: ${input.dueNow}
+Balance remaining: ${input.balanceRemaining}
 Track your order: ${input.trackUrl}
 
 Thank you for shopping with The Vastra House.`,
@@ -55,7 +59,9 @@ Thank you for shopping with The Vastra House.`,
           <p>Your booking has been received and is now in our system.</p>
           <div style="background:#fff;border:1px solid #e5dac7;padding:16px;margin:18px 0">
             <p style="margin:0 0 8px"><strong>Track ID:</strong> ${input.orderNumber}</p>
-            <p style="margin:0"><strong>Total:</strong> ${input.total}</p>
+            <p style="margin:0 0 8px"><strong>Full order value:</strong> ${input.total}</p>
+            <p style="margin:0 0 8px"><strong>Paid / due now:</strong> ${input.dueNow}</p>
+            <p style="margin:0"><strong>Balance remaining:</strong> ${input.balanceRemaining}</p>
           </div>
           <a href="${input.trackUrl}" style="display:inline-block;background:#8b1e2d;color:#fff;text-decoration:none;padding:12px 18px;border-radius:6px">Track booking</a>
           <p style="margin-top:22px;color:#6b625a;font-size:14px">Keep this email for order tracking and support.</p>

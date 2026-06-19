@@ -4,6 +4,7 @@ import { AppError } from "../middleware/errorHandler.js";
 import { Cart } from "../models/Cart.js";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
+import { logger } from "../utils/logger.js";
 import {
   createCodPayment,
   createManualPayment,
@@ -181,7 +182,7 @@ export async function createOrderFromCheckout(input: CheckoutInput) {
     await order.save();
   }
 
-  if (hasPreOrderItems) {
+  if (hasPreOrderItems && input.paymentMethod !== "razorpay") {
     await createProductionTrackersForOrder(order);
   }
 
@@ -196,7 +197,9 @@ export async function createOrderFromCheckout(input: CheckoutInput) {
     subtotal: 0,
   };
   await cart.save();
-  await sendOrderConfirmationEmail(input, order);
+  if (input.paymentMethod !== "razorpay") {
+    await sendOrderConfirmationEmail(input, order, payableNow);
+  }
 
   return { gatewayOrder: payment.gatewayOrder, order, paymentSession: payment.session ?? payment };
 }
@@ -421,9 +424,10 @@ function checkoutActorId(input: Pick<CheckoutInput, "guestEmail" | "guestSession
   return input.userId ?? input.guestSessionId ?? input.guestEmail ?? "guest";
 }
 
-async function sendOrderConfirmationEmail(
+export async function sendOrderConfirmationEmail(
   input: Pick<CheckoutInput, "guestEmail" | "shippingAddress">,
   order: { orderNumber: string; totals: { grandTotal: number; currencyCode: string } },
+  payableNow: number,
 ) {
   const email = input.guestEmail;
 
@@ -431,21 +435,39 @@ async function sendOrderConfirmationEmail(
     return;
   }
 
-  const total = new Intl.NumberFormat("en-IN", {
-    currency: order.totals.currencyCode,
+  const total = formatCheckoutMoney(order.totals.grandTotal, order.totals.currencyCode);
+  const dueNow = formatCheckoutMoney(payableNow, order.totals.currencyCode);
+  const balanceRemaining = formatCheckoutMoney(
+    Math.max(0, order.totals.grandTotal - payableNow),
+    order.totals.currencyCode,
+  );
+
+  try {
+    await sendEmail(
+      email,
+      buildOrderConfirmationTemplate({
+        balanceRemaining,
+        customerName: input.shippingAddress.fullName,
+        dueNow,
+        orderNumber: order.orderNumber,
+        total,
+        trackUrl: `${await frontendPublicUrl()}/track-order?order=${encodeURIComponent(order.orderNumber)}`,
+      }),
+    );
+  } catch (error) {
+    logger.warn(
+      { error, orderNumber: order.orderNumber, to: email },
+      "Order confirmation email failed after checkout",
+    );
+  }
+}
+
+function formatCheckoutMoney(value: number, currencyCode: string) {
+  return new Intl.NumberFormat("en-IN", {
+    currency: currencyCode,
     maximumFractionDigits: 0,
     style: "currency",
-  }).format(order.totals.grandTotal);
-
-  await sendEmail(
-    email,
-    buildOrderConfirmationTemplate({
-      customerName: input.shippingAddress.fullName,
-      orderNumber: order.orderNumber,
-      total,
-      trackUrl: `${await frontendPublicUrl()}/track-order?order=${encodeURIComponent(order.orderNumber)}`,
-    }),
-  );
+  }).format(value);
 }
 
 async function loadProductForCheckout(productId: string, variantId: string): Promise<ProductLean> {
@@ -550,7 +572,7 @@ function calculateCouponStubDiscount(_couponCode?: string) {
 }
 
 function normalizePayableNow(total: number, payableNow?: number) {
-  const value = payableNow ?? total;
+  const value = Math.round(payableNow ?? total);
 
   if (value <= 0 || value > total) {
     throw new AppError("Payable amount is invalid", 400);

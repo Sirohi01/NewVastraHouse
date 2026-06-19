@@ -6,9 +6,10 @@ import { commerceFetch, type Wishlist } from "@/lib/commerce";
 import { useAuthStore } from "@/stores/authStore";
 
 export function WishlistButton({
+  className = "",
   productId,
   variantId,
-}: Readonly<{ productId: string; variantId: string }>) {
+}: Readonly<{ className?: string; productId: string; variantId: string }>) {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [message, setMessage] = useState("");
 
@@ -26,10 +27,10 @@ export function WishlistButton({
   }
 
   return (
-    <div>
+    <div className={className}>
       <button
         aria-label="Add to wishlist"
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold hover:border-primary hover:text-primary"
+        className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-sm font-semibold hover:border-primary hover:text-primary"
         onClick={addToWishlist}
         title="Add to wishlist"
         type="button"

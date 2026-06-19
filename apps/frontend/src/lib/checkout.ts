@@ -34,6 +34,7 @@ export type CheckoutLineItem = {
   productName: string;
   slug: string;
   sku: string;
+  purchaseMode?: "regular" | "pre_order";
   unitPrice: number;
   quantity: number;
   lineSubtotal: number;
@@ -116,6 +117,17 @@ export type CheckoutOrderResponse = {
   paymentSession: PaymentSession;
 };
 
+export type RazorpayCheckoutConfig = {
+  gatewayEnabled: boolean;
+  keyId: string;
+};
+
+export type RazorpayConfirmPayload = {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+};
+
 export function checkoutPreview(
   payload: Omit<CheckoutPayload, "paymentMethod">,
   accessToken?: string,
@@ -137,6 +149,23 @@ export function createCheckoutOrder(payload: CheckoutPayload, accessToken?: stri
   });
 }
 
+export function fetchRazorpayCheckoutConfig() {
+  return apiFetch<RazorpayCheckoutConfig>("/checkout/razorpay/config");
+}
+
+export function confirmCheckoutRazorpayPayment(payload: RazorpayConfirmPayload) {
+  return apiFetch<{ order: CheckoutOrder | null; session: PaymentSession }>(
+    "/checkout/razorpay/confirm",
+    {
+      body: JSON.stringify(payload),
+      method: "POST",
+    },
+  );
+}
+
 export function fetchCheckoutOrder(orderNumber: string, accessToken?: string) {
-  return apiFetch<{ order: CheckoutOrder }>(`/checkout/orders/${orderNumber}`, { accessToken });
+  return apiFetch<{ order: CheckoutOrder; paymentSession?: PaymentSession | null }>(
+    `/checkout/orders/${orderNumber}`,
+    { accessToken },
+  );
 }

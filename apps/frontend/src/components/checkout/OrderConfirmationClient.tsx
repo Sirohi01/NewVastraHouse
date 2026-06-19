@@ -7,12 +7,14 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ErrorState } from "@/components/states/ErrorState";
 import { fetchCheckoutOrder, type CheckoutOrder } from "@/lib/checkout";
 import { formatMoney } from "@/lib/commerce";
+import type { PaymentSession } from "@/lib/payments";
 import { createReturnRequest } from "@/lib/returns";
 import { useAuthStore } from "@/stores/authStore";
 
 export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber: string }>) {
   const accessToken = useAuthStore((state) => state.accessToken);
   const [order, setOrder] = useState<CheckoutOrder>();
+  const [paymentSession, setPaymentSession] = useState<PaymentSession | null>();
   const [message, setMessage] = useState("");
   const [returnMessage, setReturnMessage] = useState("");
 
@@ -21,6 +23,7 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
       try {
         const result = await fetchCheckoutOrder(orderNumber, accessToken);
         setOrder(result.order);
+        setPaymentSession(result.paymentSession ?? null);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Order could not load");
       }
@@ -68,6 +71,10 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
               <InfoRow label="Order" value={order.orderNumber} />
               <InfoRow label="Status" value={order.status} />
               <InfoRow label="Payment" value={order.paymentMethod} />
+              <InfoRow
+                label="Payment mode"
+                value={paymentSession?.paymentMode ?? order.paymentMode}
+              />
               <InfoRow label="Shipping" value={order.shippingMethod} />
             </dl>
             <div className="mt-6 overflow-hidden rounded-md border border-border">
@@ -119,11 +126,36 @@ export function OrderConfirmationClient({ orderNumber }: Readonly<{ orderNumber:
                 )}`}
               />
               <div className="border-t border-border pt-3">
-                <InfoRow
-                  label="Total"
-                  strong
-                  value={formatMoney(order.totals.grandTotal, order.totals.currencyCode)}
-                />
+                {paymentSession ? (
+                  <>
+                    <InfoRow
+                      label="Full order value"
+                      value={formatMoney(paymentSession.amount, paymentSession.currencyCode)}
+                    />
+                    <InfoRow
+                      label="Payable now"
+                      value={formatMoney(paymentSession.payableNow, paymentSession.currencyCode)}
+                    />
+                    <InfoRow
+                      label="Paid received"
+                      strong
+                      value={formatMoney(paymentSession.paidAmount, paymentSession.currencyCode)}
+                    />
+                    <InfoRow
+                      label="Remaining balance"
+                      value={formatMoney(
+                        paymentSession.outstandingAmount,
+                        paymentSession.currencyCode,
+                      )}
+                    />
+                  </>
+                ) : (
+                  <InfoRow
+                    label="Total"
+                    strong
+                    value={formatMoney(order.totals.grandTotal, order.totals.currencyCode)}
+                  />
+                )}
               </div>
             </dl>
             <Link

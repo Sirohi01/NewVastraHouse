@@ -17,9 +17,12 @@ export type CommerceIdentity = {
 
 export type AddCartItemInput = {
   productId: string;
+  purchaseMode?: PurchaseMode;
   variantId: string;
   quantity: number;
 };
+
+export type PurchaseMode = "regular" | "pre_order";
 
 type ProductVariantSnapshot = {
   productId: Types.ObjectId;
@@ -27,6 +30,10 @@ type ProductVariantSnapshot = {
   productName: string;
   slug: string;
   sku: string;
+  purchaseMode: PurchaseMode;
+  color?: string;
+  size?: string;
+  barcode?: string;
   media?: unknown;
   unitPrice: number;
   currencyCode: string;
@@ -34,6 +41,7 @@ type ProductVariantSnapshot = {
   gstRate: number;
   stock: number;
   preOrder?: PreOrderVariantSnapshot;
+  preOrderOption?: PreOrderVariantSnapshot;
 };
 
 type CartLine = {
@@ -43,6 +51,10 @@ type CartLine = {
   productName: string;
   slug: string;
   sku: string;
+  purchaseMode?: PurchaseMode;
+  color?: string;
+  size?: string;
+  barcode?: string;
   media?: unknown;
   unitPrice: number;
   currencyCode: string;
@@ -51,6 +63,7 @@ type CartLine = {
   quantity: number;
   stockSnapshot: number;
   preOrder?: PreOrderVariantSnapshot;
+  preOrderOption?: PreOrderVariantSnapshot;
   priceSnapshotAt?: Date;
   deleteOne: () => void;
 };
@@ -78,6 +91,9 @@ type ProductLean = {
   variants: Array<{
     _id: Types.ObjectId;
     active?: boolean;
+    color?: string;
+    size?: string;
+    barcode?: string;
     sku: string;
     basePrice: number;
     salePrice?: number;
@@ -104,6 +120,7 @@ export async function getOrCreateCart(identity: CommerceIdentity) {
   const existing = await Cart.findOne(filter);
 
   if (existing) {
+    await refreshCartLineSnapshots(existing);
     existing.totals = await calculateCartTotals(existing);
     await existing.save();
     return existing;
@@ -122,13 +139,18 @@ export async function getOrCreateCart(identity: CommerceIdentity) {
 
 export async function addCartItem(identity: CommerceIdentity, input: AddCartItemInput) {
   const cart = await getOrCreateCart(identity);
-  const snapshot = await getProductVariantSnapshot(input.productId, input.variantId);
+  const purchaseMode = normalizePurchaseMode(input.purchaseMode);
+  const snapshot = await getProductVariantSnapshot(input.productId, input.variantId, purchaseMode);
 
   if (snapshot.stock < input.quantity) {
     throw new AppError("Requested quantity is not available", 409);
   }
 
-  const existingLine = cartLines(cart).find((item) => String(item.variantId) === input.variantId);
+  const existingLine = cartLines(cart).find(
+    (item) =>
+      String(item.variantId) === input.variantId &&
+      normalizePurchaseMode(item.purchaseMode) === purchaseMode,
+  );
 
   if (existingLine) {
     const nextQuantity = existingLine.quantity + input.quantity;
@@ -137,10 +159,19 @@ export async function addCartItem(identity: CommerceIdentity, input: AddCartItem
     }
     existingLine.quantity = nextQuantity;
     existingLine.unitPrice = snapshot.unitPrice;
+    existingLine.productName = snapshot.productName;
+    existingLine.slug = snapshot.slug;
+    existingLine.sku = snapshot.sku;
+    existingLine.purchaseMode = snapshot.purchaseMode;
+    existingLine.color = snapshot.color;
+    existingLine.size = snapshot.size;
+    existingLine.barcode = snapshot.barcode;
+    existingLine.media = snapshot.media;
     existingLine.hsnCode = snapshot.hsnCode;
     existingLine.gstRate = snapshot.gstRate;
     existingLine.stockSnapshot = snapshot.stock;
     existingLine.preOrder = snapshot.preOrder;
+    existingLine.preOrderOption = snapshot.preOrderOption;
   } else {
     cart.items.push({
       productId: snapshot.productId,
@@ -148,6 +179,10 @@ export async function addCartItem(identity: CommerceIdentity, input: AddCartItem
       productName: snapshot.productName,
       slug: snapshot.slug,
       sku: snapshot.sku,
+      purchaseMode: snapshot.purchaseMode,
+      color: snapshot.color,
+      size: snapshot.size,
+      barcode: snapshot.barcode,
       media: snapshot.media,
       unitPrice: snapshot.unitPrice,
       currencyCode: snapshot.currencyCode,
@@ -156,6 +191,7 @@ export async function addCartItem(identity: CommerceIdentity, input: AddCartItem
       quantity: input.quantity,
       stockSnapshot: snapshot.stock,
       preOrder: snapshot.preOrder,
+      preOrderOption: snapshot.preOrderOption,
       priceSnapshotAt: new Date(),
     });
   }
@@ -175,7 +211,11 @@ export async function updateCartItemQuantity(
     throw new AppError("Cart line item not found", 404);
   }
 
-  const snapshot = await getProductVariantSnapshot(String(line.productId), String(line.variantId));
+  const snapshot = await getProductVariantSnapshot(
+    String(line.productId),
+    String(line.variantId),
+    normalizePurchaseMode(line.purchaseMode),
+  );
 
   if (snapshot.stock < quantity) {
     throw new AppError("Requested quantity is not available", 409);
@@ -183,10 +223,64 @@ export async function updateCartItemQuantity(
 
   line.quantity = quantity;
   line.unitPrice = snapshot.unitPrice;
+  line.productName = snapshot.productName;
+  line.slug = snapshot.slug;
+  line.sku = snapshot.sku;
+  line.purchaseMode = snapshot.purchaseMode;
+  line.color = snapshot.color;
+  line.size = snapshot.size;
+  line.barcode = snapshot.barcode;
+  line.media = snapshot.media;
   line.hsnCode = snapshot.hsnCode;
   line.gstRate = snapshot.gstRate;
   line.stockSnapshot = snapshot.stock;
   line.preOrder = snapshot.preOrder;
+  line.preOrderOption = snapshot.preOrderOption;
+
+  return saveCartActivity(cart);
+}
+
+export async function updateCartItemPurchaseMode(
+  identity: CommerceIdentity,
+  lineItemId: string,
+  purchaseMode: PurchaseMode,
+) {
+  const cart = await getOrCreateCart(identity);
+  const line = findCartLine(cart, lineItemId);
+
+  if (!line) {
+    throw new AppError("Cart line item not found", 404);
+  }
+
+  const nextMode = normalizePurchaseMode(purchaseMode);
+  const snapshot = await getProductVariantSnapshot(
+    String(line.productId),
+    String(line.variantId),
+    nextMode,
+  );
+
+  if (snapshot.stock < line.quantity) {
+    throw new AppError("Requested quantity is not available", 409);
+  }
+
+  const existing = cartLines(cart).find(
+    (item) =>
+      String(item._id) !== String(line._id) &&
+      String(item.variantId) === String(line.variantId) &&
+      normalizePurchaseMode(item.purchaseMode) === nextMode,
+  );
+
+  if (existing) {
+    const nextQuantity = existing.quantity + line.quantity;
+    if (snapshot.stock < nextQuantity) {
+      throw new AppError("Requested quantity is not available", 409);
+    }
+    existing.quantity = nextQuantity;
+    applySnapshotToLine(existing, snapshot);
+    line.deleteOne();
+  } else {
+    applySnapshotToLine(line, snapshot);
+  }
 
   return saveCartActivity(cart);
 }
@@ -248,21 +342,34 @@ export async function mergeGuestCartIntoUserCart(guestSessionId: string, userId:
   }
 
   for (const guestLine of guestCart.items) {
+    const mode = normalizePurchaseMode(guestLine.purchaseMode);
     const existing = cartLines(userCart).find(
-      (line) => String(line.variantId) === String(guestLine.variantId),
+      (line) =>
+        String(line.variantId) === String(guestLine.variantId) &&
+        normalizePurchaseMode(line.purchaseMode) === mode,
     );
     const snapshot = await getProductVariantSnapshot(
       String(guestLine.productId),
       String(guestLine.variantId),
+      mode,
     );
 
     if (existing) {
       existing.quantity = Math.min(snapshot.stock, existing.quantity + guestLine.quantity);
       existing.unitPrice = snapshot.unitPrice;
+      existing.productName = snapshot.productName;
+      existing.slug = snapshot.slug;
+      existing.sku = snapshot.sku;
+      existing.purchaseMode = snapshot.purchaseMode;
+      existing.color = snapshot.color;
+      existing.size = snapshot.size;
+      existing.barcode = snapshot.barcode;
+      existing.media = snapshot.media;
       existing.hsnCode = snapshot.hsnCode;
       existing.gstRate = snapshot.gstRate;
       existing.stockSnapshot = snapshot.stock;
       existing.preOrder = snapshot.preOrder;
+      existing.preOrderOption = snapshot.preOrderOption;
     } else if (snapshot.stock > 0) {
       userCart.items.push({
         productId: snapshot.productId,
@@ -270,6 +377,10 @@ export async function mergeGuestCartIntoUserCart(guestSessionId: string, userId:
         productName: snapshot.productName,
         slug: snapshot.slug,
         sku: snapshot.sku,
+        purchaseMode: snapshot.purchaseMode,
+        color: snapshot.color,
+        size: snapshot.size,
+        barcode: snapshot.barcode,
         media: snapshot.media,
         unitPrice: snapshot.unitPrice,
         currencyCode: snapshot.currencyCode,
@@ -278,6 +389,7 @@ export async function mergeGuestCartIntoUserCart(guestSessionId: string, userId:
         quantity: Math.min(snapshot.stock, guestLine.quantity),
         stockSnapshot: snapshot.stock,
         preOrder: snapshot.preOrder,
+        preOrderOption: snapshot.preOrderOption,
         priceSnapshotAt: new Date(),
       });
     }
@@ -439,6 +551,25 @@ async function saveCartActivity(cart: Awaited<ReturnType<typeof getOrCreateCart>
   return cart;
 }
 
+async function refreshCartLineSnapshots(cart: Awaited<ReturnType<typeof getOrCreateCart>>) {
+  for (const line of cartLines(cart)) {
+    const mode = normalizePurchaseMode(
+      line.purchaseMode ?? (line.preOrder?.enabled ? "pre_order" : "regular"),
+    );
+
+    try {
+      const snapshot = await getProductVariantSnapshot(
+        String(line.productId),
+        String(line.variantId),
+        mode,
+      );
+      applySnapshotToLine(line, snapshot);
+    } catch {
+      line.purchaseMode = mode;
+    }
+  }
+}
+
 async function calculateCartTotals(cart: Awaited<ReturnType<typeof getOrCreateCart>>) {
   const lines = cartLines(cart);
   const redemptions = cart.giftCardRedemptions as Array<{ amount: number }>;
@@ -493,6 +624,7 @@ async function calculateCartTotals(cart: Awaited<ReturnType<typeof getOrCreateCa
 async function getProductVariantSnapshot(
   productId: string,
   variantId: string,
+  purchaseMode: PurchaseMode = "regular",
 ): Promise<ProductVariantSnapshot> {
   const product = (await Product.findOne({
     _id: productId,
@@ -514,6 +646,11 @@ async function getProductVariantSnapshot(
 
   const inventoryAvailable = await getAvailableStockBySku(variant.sku);
   const preOrderActive = isPreOrderActive(variant.preOrder);
+  const regularStock = inventoryAvailable ?? variant.stockPlaceholder ?? 0;
+
+  if (purchaseMode === "pre_order" && !preOrderActive) {
+    throw new AppError("Variant is not available for pre-order", 409);
+  }
 
   return {
     productId: new Types.ObjectId(productId),
@@ -521,16 +658,40 @@ async function getProductVariantSnapshot(
     productName: product.name,
     slug: product.slug,
     sku: variant.sku,
+    purchaseMode,
+    color: variant.color,
+    size: variant.size,
+    barcode: variant.barcode,
     media: (variant.media?.[0] ?? product.media?.[0]) as unknown,
-    preOrder: preOrderActive ? variant.preOrder : undefined,
+    preOrder: purchaseMode === "pre_order" ? variant.preOrder : undefined,
+    preOrderOption: preOrderActive ? variant.preOrder : undefined,
     unitPrice: variant.salePrice ?? variant.basePrice,
     hsnCode: product.hsnCode,
     gstRate: product.gstRate,
     currencyCode: variant.currencyCode ?? "INR",
-    stock: preOrderActive
-      ? (variant.preOrder?.remainingQuantity ?? 0)
-      : (inventoryAvailable ?? variant.stockPlaceholder ?? 0),
+    stock: purchaseMode === "pre_order" ? (variant.preOrder?.remainingQuantity ?? 0) : regularStock,
   };
+}
+
+function applySnapshotToLine(line: CartLine, snapshot: ProductVariantSnapshot) {
+  line.unitPrice = snapshot.unitPrice;
+  line.productName = snapshot.productName;
+  line.slug = snapshot.slug;
+  line.sku = snapshot.sku;
+  line.purchaseMode = snapshot.purchaseMode;
+  line.color = snapshot.color;
+  line.size = snapshot.size;
+  line.barcode = snapshot.barcode;
+  line.media = snapshot.media;
+  line.hsnCode = snapshot.hsnCode;
+  line.gstRate = snapshot.gstRate;
+  line.stockSnapshot = snapshot.stock;
+  line.preOrder = snapshot.preOrder;
+  line.preOrderOption = snapshot.preOrderOption;
+}
+
+function normalizePurchaseMode(value?: string): PurchaseMode {
+  return value === "pre_order" ? "pre_order" : "regular";
 }
 
 function cartLines(cart: { items: unknown }): CartLine[] {

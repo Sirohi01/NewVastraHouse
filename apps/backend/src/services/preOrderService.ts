@@ -106,7 +106,7 @@ export async function releasePreOrderSlots(items: Array<{ variantId: unknown; qu
 export async function createProductionTrackersForOrder(order: {
   _id: unknown;
   orderNumber: string;
-  userId: unknown;
+  userId?: unknown;
   items: Array<{
     productId: unknown;
     variantId: unknown;
@@ -127,25 +127,40 @@ export async function createProductionTrackersForOrder(order: {
       continue;
     }
 
-    trackers.push(
-      await ProductionTracker.create({
-        expectedDeliveryAt: item.preOrder.expectedDeliveryAt,
-        expectedDispatchAt: item.preOrder.expectedDispatchAt,
-        history: [{ actorType: "system", stage: "order_received" }],
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        sku: item.sku,
-        stage: "order_received",
-        userId: order.userId,
-        variantId: item.variantId,
-      }),
-    );
+    try {
+      trackers.push(
+        await ProductionTracker.create({
+          expectedDeliveryAt: item.preOrder.expectedDeliveryAt,
+          expectedDispatchAt: item.preOrder.expectedDispatchAt,
+          history: [{ actorType: "system", stage: "order_received" }],
+          orderId: order._id,
+          orderNumber: order.orderNumber,
+          productId: item.productId,
+          productName: item.productName,
+          quantity: item.quantity,
+          sku: item.sku,
+          stage: "order_received",
+          ...(order.userId ? { userId: order.userId } : {}),
+          variantId: item.variantId,
+        }),
+      );
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+    }
   }
 
   return trackers;
+}
+
+function isDuplicateKeyError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === 11000
+  );
 }
 
 export async function listAdminPreOrders(filter: { stage?: ProductionStage } = {}) {

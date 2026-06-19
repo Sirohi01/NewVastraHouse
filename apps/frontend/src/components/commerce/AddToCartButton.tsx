@@ -8,9 +8,15 @@ import { useAuthStore } from "@/stores/authStore";
 
 export function AddToCartButton({
   productId,
+  purchaseMode = "regular",
   quantity = 1,
   variantId,
-}: Readonly<{ productId: string; quantity?: number; variantId: string }>) {
+}: Readonly<{
+  productId: string;
+  purchaseMode?: "regular" | "pre_order";
+  quantity?: number;
+  variantId: string;
+}>) {
   const accessToken = useAuthStore((state) => state.accessToken);
   const setCart = useCartStore((state) => state.setCart);
   const [message, setMessage] = useState("");
@@ -23,7 +29,7 @@ export function AddToCartButton({
     try {
       const payload = await commerceFetch<{ cart: Cart }>("/commerce/cart/items", {
         accessToken,
-        body: JSON.stringify({ productId, quantity, variantId }),
+        body: JSON.stringify({ productId, purchaseMode, quantity, variantId }),
         method: "POST",
       });
       setCart(payload.cart);

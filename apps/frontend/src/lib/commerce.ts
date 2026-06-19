@@ -7,9 +7,13 @@ export type CartLineItem = {
   _id: string;
   productId: string;
   variantId: string;
+  purchaseMode?: "regular" | "pre_order";
   productName: string;
   slug: string;
   sku: string;
+  color?: string;
+  size?: string;
+  barcode?: string;
   media?: MediaReference;
   unitPrice: number;
   currencyCode: string;
@@ -28,6 +32,7 @@ export type CartLineItem = {
     quantityCap?: number;
     remainingQuantity?: number;
   };
+  preOrderOption?: CartLineItem["preOrder"];
 };
 
 export type Cart = {

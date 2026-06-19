@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AddToCartButton } from "@/components/commerce/AddToCartButton";
 import { WishlistButton } from "@/components/commerce/WishlistButton";
 import { ComparisonToggle } from "@/components/catalog/ComparisonToggle";
@@ -24,10 +24,14 @@ export function ProductDetailClient({
   reviews,
 }: Readonly<{ pdp: PdpResponse; reviews: ProductReview[] }>) {
   const [selectedMedia, setSelectedMedia] = useState(0);
+  const [purchaseMode, setPurchaseMode] = useState<"regular" | "pre_order">("regular");
   const [selectedVariant, setSelectedVariant] = useState(0);
   const product = pdp.product;
   const media = getProductMedia(product);
   const variant = product.variants[selectedVariant] ?? product.variants[0];
+  const canPreOrder = Boolean(
+    variant?.preOrder?.enabled && (variant.preOrder.remainingQuantity ?? 0) > 0,
+  );
   const pricing = getProductPricing({ ...product, variants: [variant] });
   const storedProduct = useMemo(
     () => ({
@@ -38,6 +42,18 @@ export function ProductDetailClient({
     }),
     [media, product],
   );
+
+  useEffect(() => {
+    if (typeof document !== "undefined" && document.referrer.includes("/pre-order")) {
+      setPurchaseMode("pre_order");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canPreOrder && purchaseMode === "pre_order") {
+      setPurchaseMode("regular");
+    }
+  }, [canPreOrder, purchaseMode]);
 
   return (
     <main className="bg-[#fbf7ef]">
@@ -122,8 +138,30 @@ export function ProductDetailClient({
             />
           </div>
 
+          {canPreOrder ? (
+            <div className="mt-6 rounded-md border border-[#e1d6c4] bg-white p-3">
+              <p className="text-sm font-semibold text-[#3d1620]">Choose purchase type</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <PurchaseModeButton
+                  active={purchaseMode === "regular"}
+                  label="Buy regular"
+                  onClick={() => setPurchaseMode("regular")}
+                />
+                <PurchaseModeButton
+                  active={purchaseMode === "pre_order"}
+                  label="Pre-order"
+                  onClick={() => setPurchaseMode("pre_order")}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-6 flex flex-wrap gap-3">
-            <AddToCartButton productId={product._id} variantId={String(variant?._id)} />
+            <AddToCartButton
+              productId={product._id}
+              purchaseMode={purchaseMode}
+              variantId={String(variant?._id)}
+            />
             <ComparisonToggle product={storedProduct} />
             <WishlistButton productId={product._id} variantId={String(variant?._id)} />
           </div>
@@ -188,6 +226,26 @@ export function ProductDetailClient({
         <RecentlyViewed product={storedProduct} />
       </div>
     </main>
+  );
+}
+
+function PurchaseModeButton({
+  active,
+  label,
+  onClick,
+}: Readonly<{ active: boolean; label: string; onClick: () => void }>) {
+  return (
+    <button
+      className={`h-10 rounded-md border px-3 text-sm font-semibold ${
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card text-foreground"
+      }`}
+      onClick={onClick}
+      type="button"
+    >
+      {label}
+    </button>
   );
 }
 

@@ -87,7 +87,7 @@ export function ProductCard({
             {product.shortDescription}
           </p>
         ) : null}
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-2">
+        <div className="mt-auto grid gap-2 pt-2">
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-[#3d2a18]">{pricing.price}</span>
             {pricing.hasSale ? (
@@ -101,10 +101,14 @@ export function ProductCard({
               </>
             ) : null}
           </span>
-          <div className="flex flex-wrap gap-2">
-            <ComparisonToggle product={storedProduct} />
+          <div className="grid grid-cols-2 gap-2">
+            <ComparisonToggle className="w-full min-w-0 px-2" product={storedProduct} />
             {product.variants[0]?._id ? (
-              <WishlistButton productId={product._id} variantId={product.variants[0]._id} />
+              <WishlistButton
+                className="min-w-0"
+                productId={product._id}
+                variantId={product.variants[0]._id}
+              />
             ) : null}
           </div>
         </div>

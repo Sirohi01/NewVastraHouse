@@ -23,13 +23,20 @@ export async function sendEmail(to: string, template: AuthEmailTemplate) {
 }
 
 async function sendSmtpMessage(to: string, message: string, settings: SmtpSettings) {
-  const socket = settings.secure
+  let socket: net.Socket | tls.TLSSocket = settings.secure
     ? tls.connect(settings.port, settings.host)
     : net.connect(settings.port, settings.host);
 
-  const read = createReader(socket);
+  let read = createReader(socket);
   await read();
   await command(socket, read, `EHLO ${settings.host}`);
+
+  if (!settings.secure) {
+    await command(socket, read, "STARTTLS");
+    socket = await upgradeToTls(socket, settings.host);
+    read = createReader(socket);
+    await command(socket, read, `EHLO ${settings.host}`);
+  }
 
   if (settings.user && settings.pass) {
     await command(socket, read, "AUTH LOGIN");
@@ -42,6 +49,15 @@ async function sendSmtpMessage(to: string, message: string, settings: SmtpSettin
   await command(socket, read, "DATA");
   await command(socket, read, `${message}\r\n.`);
   await command(socket, read, "QUIT");
+}
+
+function upgradeToTls(socket: net.Socket, host: string) {
+  return new Promise<tls.TLSSocket>((resolve, reject) => {
+    const secureSocket = tls.connect({ servername: host, socket }, () => {
+      resolve(secureSocket);
+    });
+    secureSocket.once("error", reject);
+  });
 }
 
 function buildMimeMessage(to: string, template: AuthEmailTemplate, settings: SmtpSettings) {

@@ -12,6 +12,7 @@ import {
   removeCartItem,
   removeWishlistItem,
   setGiftPackaging,
+  updateCartItemPurchaseMode,
   updateCartItemQuantity,
   validateGiftCardForCart,
   type CommerceIdentity,
@@ -24,6 +25,7 @@ const guestSessionSchema = z.string().min(12).max(128);
 const addItemSchema = z
   .object({
     productId: objectIdSchema,
+    purchaseMode: z.enum(["regular", "pre_order"]).optional(),
     variantId: objectIdSchema,
     quantity: z.coerce.number().int().min(1).max(99).default(1),
   })
@@ -46,6 +48,27 @@ commerceRouter.post(
   async (req, res, next) => {
     try {
       res.status(201).json({ cart: await addCartItem(getCommerceIdentity(req), req.body) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+commerceRouter.patch(
+  "/cart/items/:lineItemId/purchase-mode",
+  validateRequest({
+    body: z.object({ purchaseMode: z.enum(["regular", "pre_order"]) }).strict(),
+    params: z.object({ lineItemId: objectIdSchema }).strict(),
+  }),
+  async (req, res, next) => {
+    try {
+      res.json({
+        cart: await updateCartItemPurchaseMode(
+          getCommerceIdentity(req),
+          String(req.params.lineItemId),
+          req.body.purchaseMode,
+        ),
+      });
     } catch (error) {
       next(error);
     }
